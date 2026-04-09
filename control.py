@@ -7,11 +7,9 @@ from memory  import (
     get_relevant_past, clear_today, memory_stats,
 )
 
-# ── Startup ───────────────────────────────────────────────────────────────────
-
 projects     = load_projects()
 active_model = None
-MAX_HISTORY  = 20   # cap on live in-session history (safety valve)
+MAX_HISTORY  = 20
 
 print("=" * 50)
 print("  Personal AI Agent")
@@ -23,8 +21,6 @@ print("\n[Loading memory...]", end=" ", flush=True)
 history = load_today_history()
 print(f"resumed {len(history) // 2} exchanges from today" if history else "fresh session")
 
-# ── Main loop ─────────────────────────────────────────────────────────────────
-
 while True:
     try:
         question = input("\nYou: ").strip()
@@ -34,8 +30,6 @@ while True:
 
     if not question:
         continue
-
-    # ── Built-in commands ─────────────────────────────────────────────────────
 
     if question == "/stop":
         if active_model:
@@ -56,10 +50,10 @@ while True:
         if not history:
             print("[No history this session]")
         for msg in history:
-            role = "You" if msg["role"] == "user" else "AI"
+            role    = "You" if msg["role"] == "user" else "AI"
             snippet = msg["content"][:80]
-            ellipsis = "..." if len(msg["content"]) > 80 else ""
-            print(f"  {role}: {snippet}{ellipsis}")
+            suffix  = "..." if len(msg["content"]) > 80 else ""
+            print(f"  {role}: {snippet}{suffix}")
         continue
 
     if question == "/memory":
@@ -80,14 +74,10 @@ while True:
         print(f"[Active model: {active_model or 'none yet'}]")
         continue
 
-    # ── Model routing ─────────────────────────────────────────────────────────
-
     model = route(question)
     if model != active_model:
         print(f"[→ {model}]")
         active_model = model
-
-    # ── Project foldering + keyword RAG ───────────────────────────────────────
 
     project_context = ""
     detected = detect_project(question, projects)
@@ -100,33 +90,18 @@ while True:
         else:
             print("[No matching chunks found]")
 
-    # ── Semantic past retrieval ───────────────────────────────────────────────
-
     past_context = get_relevant_past(question)
 
-    # ── Build system prompt ───────────────────────────────────────────────────
-
     system_parts = ["You are a helpful personal AI assistant."]
-
     if past_context:
-        system_parts.append(
-            f"Relevant context from past conversations:\n{past_context}"
-        )
-
+        system_parts.append(f"Relevant context from past conversations:\n{past_context}")
     if project_context:
-        system_parts.append(
-            f"Relevant project file excerpts:\n{project_context}"
-        )
-
+        system_parts.append(f"Relevant project file excerpts:\n{project_context}")
     system_prompt = "\n\n".join(system_parts)
-
-    # ── Build messages: system + today's history + new question ───────────────
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += history
     messages.append({"role": "user", "content": question})
-
-    # ── Stream response ───────────────────────────────────────────────────────
 
     response_content = ""
     stream = ollama.chat(model=model, messages=messages, stream=True)
@@ -138,15 +113,10 @@ while True:
         response_content += content
     print()
 
-    # ── Update live history ───────────────────────────────────────────────────
-
     history.append({"role": "user",      "content": question})
     history.append({"role": "assistant", "content": response_content})
 
-    # Safety cap — keep most recent MAX_HISTORY exchanges in RAM
     if len(history) > MAX_HISTORY * 2:
         history = history[-(MAX_HISTORY * 2):]
-
-    # ── Persist to ChromaDB ───────────────────────────────────────────────────
 
     save_exchange(question, response_content)

@@ -1,20 +1,13 @@
-"""
-context.py — Project foldering + keyword RAG.
-
-Context stashing (old txt/summary approach) has been removed.
-Memory is now handled entirely by memory.py (ChromaDB).
-"""
-
 import json
 from pathlib import Path
 
 PROJECTS_FILE       = Path(__file__).parent / "projects.json"
-CHUNK_SIZE          = 20   # lines per chunk
-TOP_K_CHUNKS        = 4    # max chunks injected per turn
+CHUNK_SIZE          = 20   
+TOP_K_CHUNKS        = 4    
 INDEXED_EXTENSIONS  = {".py", ".md", ".txt", ".json", ".yaml", ".yml", ".csv"}
 
 
-# ── Project foldering ─────────────────────────────────────────────────────────
+
 
 def load_projects() -> dict:
     if PROJECTS_FILE.exists():
@@ -29,13 +22,8 @@ def detect_project(user_input: str, projects: dict) -> str | None:
     return None
 
 
-# ── Keyword RAG ───────────────────────────────────────────────────────────────
 
 def get_relevant_chunks(folders: list, query: str, top_k: int = TOP_K_CHUNKS) -> str:
-    """
-    Scan project folders, split files into chunks, score by keyword overlap,
-    return the top-k most relevant chunks as a formatted string.
-    """
     chunks      = []
     query_words = set(query.lower().split())
 
