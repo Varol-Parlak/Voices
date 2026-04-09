@@ -1,5 +1,6 @@
 import ollama
 import subprocess
+from pathlib import Path
 from router  import route
 from context import load_projects, detect_project, get_relevant_chunks
 from memory  import (
@@ -74,8 +75,12 @@ while True:
         print(f"[Active model: {active_model or 'none yet'}]")
         continue
 
-    model = route(question)
+    model = route(question, active_model)
     if model != active_model:
+        if active_model is not None:
+            print(f"[Stopping {active_model}]")
+            subprocess.run(["ollama", "stop", active_model], check=False)
+            print(f"[Switched to {model}]")
         active_model = model
 
     project_context = ""
@@ -91,7 +96,18 @@ while True:
 
     past_context = get_relevant_past(question)
 
-    system_parts = ["You are a helpful personal AI assistant."]
+    system_parts = [
+        "You are a helpful personal AI assistant.",
+        "IMPORTANT: The following User Information and Contexts are for your background knowledge only.",
+        "Do NOT acknowledge them or explicitly mention them in your responses unless relevant to the user's request."
+    ]
+
+    user_info_file = Path(__file__).parent / "user_info.md"
+    if user_info_file.exists():
+        user_info = user_info_file.read_text(encoding="utf-8").strip()
+        if user_info:
+            system_parts.append(f"User Information:\n{user_info}")
+
     if past_context:
         system_parts.append(f"Relevant context from past conversations:\n{past_context}")
     if project_context:

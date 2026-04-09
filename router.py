@@ -7,9 +7,9 @@ MODEL_TRIGGERS = {
 }
 
 
-def route(prompt: str) -> str:
+def route(prompt: str, current_model: str = None) -> str:
     prompt_lower = prompt.lower()
     for trigger, model in MODEL_TRIGGERS.items():
         if trigger in prompt_lower:
             return model
-    return DEFAULT_MODEL
+    return current_model or DEFAULT_MODEL
