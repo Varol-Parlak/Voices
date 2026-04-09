@@ -2,6 +2,7 @@ import ollama
 import subprocess
 from pathlib import Path
 from router  import route
+from tools import search_web
 from context import load_projects, detect_project, get_relevant_chunks
 from memory  import (
     load_today_history, save_exchange,
@@ -31,6 +32,15 @@ while True:
 
     if not question:
         continue
+
+    web_context = ""
+    if question.startswith("/search "):
+        query = question[8:].strip()
+        if not query:
+            print("[Please provide a search query]")
+            continue
+        web_context = search_web(query)
+        question = query  # the model will just see the query
 
     if question == "/stop":
         if active_model:
@@ -112,6 +122,8 @@ while True:
         system_parts.append(f"Relevant context from past conversations:\n{past_context}")
     if project_context:
         system_parts.append(f"Relevant project file excerpts:\n{project_context}")
+    if web_context:
+        system_parts.append(f"Live Web Search context for this query:\n{web_context}")
     system_prompt = "\n\n".join(system_parts)
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -123,9 +135,10 @@ while True:
 
     print(f"AI ({model}): ", end="", flush=True)
     for chunk in stream:
-        content = chunk["message"]["content"]
-        print(content, end="", flush=True)
-        response_content += content
+        content = chunk["message"].get("content", "")
+        if content:
+            print(content, end="", flush=True)
+            response_content += content
     print()
 
     history.append({"role": "user",      "content": question})
