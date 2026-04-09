@@ -2,7 +2,7 @@ import ollama
 import subprocess
 from pathlib import Path
 from router  import route
-from tools import search_web
+from tools import search_web, read_file, append_file, replace_in_file
 from context import load_projects, detect_project, get_relevant_chunks
 from memory  import (
     load_today_history, save_exchange,
@@ -41,6 +41,76 @@ while True:
             continue
         web_context = search_web(query)
         question = query  # the model will just see the query
+
+    if question.startswith("/agent "):
+        agent_query = question[7:].strip()
+        if not agent_query:
+            print("[Please provide an agent instruction]")
+            continue
+            
+        print(f"\n[Starting agent loop for: '{agent_query}']")
+        
+        agent_system = f"""You are an autonomous file-editing agent.
+            Your Current Working Directory is: {Path.cwd()}
+            You have access to read_file, append_file, and replace_in_file tools.
+            CRITICAL INSTRUCTIONS:
+            1. You MUST use the native tool calling schema. DO NOT output conversational text describing the JSON.
+            2. DO NOT overwrite entire files. To edit a file, use read_file to see its contents, then use append_file for adding lines, or replace_in_file for tweaking existing lines.
+            3. You may ONLY edit files explicitly requested by the user.
+            4. Provide a final summary of your changes when finished."""
+        
+        agent_messages = [{"role": "system", "content": agent_system}]
+        agent_messages.append({"role": "user", "content": agent_query})
+        
+        agent_model = active_model or "llama3.1:8b"
+        MAX_STEPS = 6
+        steps = 0
+        
+        while steps < MAX_STEPS:
+            steps += 1
+            
+            try:
+                resp = ollama.chat(model=agent_model, messages=agent_messages, tools=[read_file, append_file, replace_in_file], stream=False)
+            except Exception as e:
+                print(f"[Agent crashed: {e}]")
+                break
+                
+            msg = resp.get("message", {})
+            agent_messages.append(msg)
+            
+            tool_calls = msg.get("tool_calls")
+            if not tool_calls:
+                final_text = msg.get("content", "")
+                if final_text:
+                    print(f"\\nAI ({agent_model}): {final_text}\\n")
+                history.append({"role": "user", "content": question})
+                history.append({"role": "assistant", "content": final_text})
+                save_exchange(question, final_text)
+                break
+                
+            for tc in tool_calls:
+                fn_name = tc["function"]["name"]
+                args    = tc["function"]["arguments"]
+                
+                if fn_name == "read_file":
+                    res_body = read_file(args.get("filepath", ""))
+                elif fn_name == "append_file":
+                    res_body = append_file(args.get("filepath", ""), args.get("content", ""))
+                elif fn_name == "replace_in_file":
+                    res_body = replace_in_file(args.get("filepath", ""), args.get("target", ""), args.get("replacement", ""))
+                else:
+                    res_body = "Error: Unknown tool."
+                    
+                agent_messages.append({
+                    "role": "tool",
+                    "content": res_body,
+                    "name": fn_name
+                })
+        
+        if steps >= MAX_STEPS:
+            print(f"\n[Agent reached max steps ({MAX_STEPS}) and stopped.]")
+            
+        continue
 
     if question == "/stop":
         if active_model:
@@ -108,8 +178,10 @@ while True:
 
     system_parts = [
         "You are a helpful personal AI assistant.",
-        "IMPORTANT: The following User Information and Contexts are for your background knowledge only.",
-        "Do NOT acknowledge them or explicitly mention them in your responses unless relevant to the user's request."
+        "CRITICAL INSTRUCTIONS:",
+        "1. Keep your responses extremely concise and to the point. Do not write unnecessary fluff paragraphs.",
+        "2. If you are provided with Web Search but it doesn't contain the specific data requested (e.g. the exact temperature or time), you MUST admit you don't know it. Do NOT hallucinate placeholders.",
+        "3. The following User Information and Contexts are for your background knowledge only. Do NOT explicitly mention them unless relevant."
     ]
 
     user_info_file = Path(__file__).parent / "user_info.md"

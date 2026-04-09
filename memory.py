@@ -9,7 +9,7 @@ import ollama
 CHROMA_DIR     = Path(__file__).parent / "memory" / "chroma"
 COLLECTION     = "conversations"
 MAX_TODAY_HIST = 20
-TOP_K_PAST     = 3
+TOP_K_PAST     = 10
 
 
 class OllamaEmbeddings:
