@@ -13,6 +13,9 @@ TOP_K_PAST     = 3
 
 
 class OllamaEmbeddings:
+    def name(self) -> str:
+        return "ollama-nomic-embed-text"
+
     def __call__(self, input: List[str]) -> List[List[float]]:
         return [
             ollama.embeddings(model="nomic-embed-text", prompt=text)["embedding"]

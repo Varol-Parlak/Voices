@@ -76,7 +76,6 @@ while True:
 
     model = route(question)
     if model != active_model:
-        print(f"[→ {model}]")
         active_model = model
 
     project_context = ""

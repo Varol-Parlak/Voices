@@ -6,9 +6,6 @@ CHUNK_SIZE          = 20
 TOP_K_CHUNKS        = 4    
 INDEXED_EXTENSIONS  = {".py", ".md", ".txt", ".json", ".yaml", ".yml", ".csv"}
 
-
-
-
 def load_projects() -> dict:
     if PROJECTS_FILE.exists():
         return json.loads(PROJECTS_FILE.read_text(encoding="utf-8"))
