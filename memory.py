@@ -22,6 +22,12 @@ class OllamaEmbeddings:
             for text in input
         ]
 
+    def embed_query(self, input: List[str]) -> List[List[float]]:
+        return self.__call__(input)
+
+    def embed_documents(self, input: List[str]) -> List[List[float]]:
+        return self.__call__(input)
+
 
 _col = None
 

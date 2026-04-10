@@ -6,10 +6,10 @@ MODEL_TRIGGERS = {
     "llama":    "llama3.1:8b",
 }
 
-
 def route(prompt: str, current_model: str = None) -> str:
     prompt_lower = prompt.lower()
     for trigger, model in MODEL_TRIGGERS.items():
         if trigger in prompt_lower:
             return model
     return current_model or DEFAULT_MODEL
+

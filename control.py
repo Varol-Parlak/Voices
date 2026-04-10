@@ -33,6 +33,36 @@ while True:
     if not question:
         continue
 
+    from router import MODEL_TRIGGERS, DEFAULT_MODEL
+
+    if question == "/model":
+        print(f"[Active model: {active_model or 'none yet'}]")
+        continue
+
+    if question.startswith("/model "):
+        parts = question.split(maxsplit=2)
+        target = parts[1].lower()
+        if target in MODEL_TRIGGERS:
+            new_model = MODEL_TRIGGERS[target]
+            if new_model != active_model:
+                if active_model is not None:
+                    print(f"[Stopping {active_model}]")
+                    subprocess.run(["ollama", "stop", active_model], check=False)
+                print(f"[Switched to {new_model}]")
+                active_model = new_model
+        else:
+            print(f"[Unknown model alias '{target}'. Known: {', '.join(MODEL_TRIGGERS.keys())}]")
+        
+        if len(parts) > 2:
+            question = parts[2].strip()
+            if not question:
+                continue
+        else:
+            continue
+
+    if active_model is None:
+        active_model = DEFAULT_MODEL
+
     web_context = ""
     if question.startswith("/search "):
         query = question[8:].strip()
@@ -72,6 +102,7 @@ while True:
         agent_model = active_model or "llama3.1:8b"
         MAX_STEPS = 6
         steps = 0
+        last_call_signatures = []   # track recent (fn_name, args_str) to detect loops
         
         while steps < MAX_STEPS:
             steps += 1
@@ -88,13 +119,71 @@ while True:
             tool_calls = msg.get("tool_calls")
             if not tool_calls:
                 final_text = msg.get("content", "")
+                try:
+                    import json
+                    objects = []
+                    i = 0
+                    while i < len(final_text):
+                        char = final_text[i]
+                        if char == '{':
+                            brace_count = 1
+                            start = i
+                            i += 1
+                            in_str = False
+                            escape_next = False
+                            while i < len(final_text) and brace_count > 0:
+                                c = final_text[i]
+                                if escape_next:
+                                    escape_next = False
+                                elif c == '\\':
+                                    escape_next = True
+                                elif c == '"':
+                                    in_str = not in_str
+                                elif not in_str:
+                                    if c == '{':
+                                        brace_count += 1
+                                    elif c == '}':
+                                        brace_count -= 1
+                                i += 1
+                            if brace_count == 0:
+                                objects.append(final_text[start:i])
+                        else:
+                            i += 1
+
+                    found_tools = []
+                    for obj in objects:
+                        try:
+                            parsed = json.loads(obj)
+                            if isinstance(parsed, dict) and "name" in parsed and "arguments" in parsed:
+                                found_tools.append({"function": parsed})
+                        except Exception:
+                            pass
+                            
+                    if found_tools:
+                        tool_calls = found_tools
+                except Exception:
+                    pass
+
+            if not tool_calls:
+                final_text = msg.get("content", "")
                 if final_text:
                     print(f"\nAI ({agent_model}): {final_text}\n")
                 history.append({"role": "user", "content": question})
                 history.append({"role": "assistant", "content": final_text})
                 save_exchange(question, final_text)
                 break
-                
+            
+            # --- Loop detection: check if model is repeating the same calls ---
+            import json as _json
+            current_signatures = [
+                (tc["function"]["name"], _json.dumps(tc["function"]["arguments"], sort_keys=True))
+                for tc in tool_calls
+            ]
+            if current_signatures == last_call_signatures:
+                print(f"\n[Agent detected in infinite loop — same tool calls repeated. Stopping.]")
+                break
+            last_call_signatures = current_signatures
+
             for tc in tool_calls:
                 fn_name = tc["function"]["name"]
                 args    = tc["function"]["arguments"]
@@ -107,6 +196,20 @@ while True:
                     res_body = replace_in_file(args.get("filepath", ""), args.get("target", ""), args.get("replacement", ""))
                 else:
                     res_body = "Error: Unknown tool."
+                    
+                if res_body.startswith("Error:"):
+                    res_body += (
+                        "\n\nRECOVERY HINT: Your last action failed. "
+                        "Use read_file to re-read the current file contents first, "
+                        "then try a DIFFERENT approach. Do NOT repeat the same failing action."
+                    )
+                    print(f"  [Tool error — stopping batch early]")
+                    agent_messages.append({
+                        "role": "tool",
+                        "content": res_body,
+                        "name": fn_name
+                    })
+                    break   # ← stop the batch; let model recover on next step
                     
                 agent_messages.append({
                     "role": "tool",
@@ -158,17 +261,7 @@ while True:
             print("[No projects configured in projects.json]")
         continue
 
-    if question == "/model":
-        print(f"[Active model: {active_model or 'none yet'}]")
-        continue
 
-    model = route(question, active_model)
-    if model != active_model:
-        if active_model is not None:
-            print(f"[Stopping {active_model}]")
-            subprocess.run(["ollama", "stop", active_model], check=False)
-            print(f"[Switched to {model}]")
-        active_model = model
 
     project_context = ""
     detected = detect_project(question, projects)
@@ -210,9 +303,9 @@ while True:
     messages.append({"role": "user", "content": question})
 
     response_content = ""
-    stream = ollama.chat(model=model, messages=messages, stream=True)
+    stream = ollama.chat(model=active_model, messages=messages, stream=True)
 
-    print(f"AI ({model}): ", end="", flush=True)
+    print(f"AI ({active_model}): ", end="", flush=True)
     for chunk in stream:
         content = chunk["message"].get("content", "")
         if content:
