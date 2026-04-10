@@ -13,11 +13,11 @@ projects     = load_projects()
 active_model = None
 MAX_HISTORY  = 20
 
-print("=" * 50)
+print("=" * 70)
 print("  Personal AI Agent")
-print("=" * 50)
-print("  /stop  /context clear  /projects  /model  /history  /memory")
-print("=" * 50)
+print("=" * 70)
+print("  /stop  /context clear  /projects  /model  /history  /memory /agent")
+print("=" * 70)
 
 print("\n[Loading memory...]", end=" ", flush=True)
 history = load_today_history()
@@ -50,13 +50,20 @@ while True:
             
         print(f"\n[Starting agent loop for: '{agent_query}']")
         
+        agent_project = detect_project(agent_query, projects)
+        project_info = ""
+        if agent_project:
+            dirs = list(projects[agent_project].values())
+            project_info = f"\n            User referenced project '{agent_project}'.\n            Project Directories: {dirs}\n            Use these paths to locate files."
+            print(f"[Agent context loaded for project: '{agent_project}']")
+
         agent_system = f"""You are an autonomous file-editing agent.
-            Your Current Working Directory is: {Path.cwd()}
+            Your Current Working Directory is: {Path.cwd()}{project_info}
             You have access to read_file, append_file, and replace_in_file tools.
             CRITICAL INSTRUCTIONS:
             1. You MUST use the native tool calling schema. DO NOT output conversational text describing the JSON.
             2. DO NOT overwrite entire files. To edit a file, use read_file to see its contents, then use append_file for adding lines, or replace_in_file for tweaking existing lines.
-            3. You may ONLY edit files explicitly requested by the user.
+            3. You may ONLY edit files explicitly requested by the user. If they mention a project, use the provided Project Directories as the base path.
             4. Provide a final summary of your changes when finished."""
         
         agent_messages = [{"role": "system", "content": agent_system}]
@@ -82,7 +89,7 @@ while True:
             if not tool_calls:
                 final_text = msg.get("content", "")
                 if final_text:
-                    print(f"\\nAI ({agent_model}): {final_text}\\n")
+                    print(f"\nAI ({agent_model}): {final_text}\n")
                 history.append({"role": "user", "content": question})
                 history.append({"role": "assistant", "content": final_text})
                 save_exchange(question, final_text)
