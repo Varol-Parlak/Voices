@@ -302,7 +302,39 @@ while True:
 
     past_context = get_relevant_past(question)
 
-    
+    _should_clarify = (
+        len(question) < 120
+        and not web_context
+        and not project_context
+    )
+    if _should_clarify:
+        _clarify_system = (
+            "You are a clarification gate. "
+            "Read the user's message and decide if you have enough context to answer it well.\n"
+            "- If the message is clear and self-contained, reply with exactly one word: CLEAR\n"
+            "- If it is genuinely ambiguous and you need ONE specific piece of info, "
+            "reply with only that question. One sentence. No preamble.\n"
+            "Do not answer the question. Do not explain your reasoning."
+        )
+        _clarify_msgs = [{"role": "system", "content": _clarify_system}]
+        if history:
+            _clarify_msgs += history[-4:]   # last 2 exchanges for context
+        _clarify_msgs.append({"role": "user", "content": question})
+
+        try:
+            _cr = ollama.chat(model=active_model, messages=_clarify_msgs, stream=False)
+            _clarify_reply = _cr["message"].get("content", "").strip()
+        except Exception:
+            _clarify_reply = "CLEAR"
+
+        if _clarify_reply.upper() != "CLEAR" and _clarify_reply:
+            print(f"\nAI: {_clarify_reply}")
+            try:
+                _extra = input("You: ").strip()
+            except (KeyboardInterrupt, EOFError):
+                _extra = ""
+            if _extra:
+                question = f"{question}\n\nAdditional context: {_extra}"
 
     system_parts = [
         "You are a helpful personal AI assistant.",
