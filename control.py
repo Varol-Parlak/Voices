@@ -2,6 +2,7 @@ import ollama
 import subprocess
 from pathlib import Path
 from router  import route
+from router import MODEL_TRIGGERS, DEFAULT_MODEL
 from tools import search_web, read_file, append_file, replace_in_file
 from context import load_projects, detect_project, get_relevant_chunks
 from memory  import (
@@ -9,14 +10,17 @@ from memory  import (
     get_relevant_past, clear_today, memory_stats,
 )
 
+PROFILES_DIR = Path(__file__).parent / "profiles"
+
 projects     = load_projects()
 active_model = None
+active_voice = "p_friend"   # default personality
 MAX_HISTORY  = 20
 
 print("=" * 70)
 print("  Personal AI Agent")
 print("=" * 70)
-print("  /stop  /context clear  /projects  /model  /history  /memory /agent")
+print("  /stop  /context clear  /projects  /model  /history  /memory  /agent  /voice")
 print("=" * 70)
 
 print("\n[Loading memory...]", end=" ", flush=True)
@@ -33,7 +37,29 @@ while True:
     if not question:
         continue
 
-    from router import MODEL_TRIGGERS, DEFAULT_MODEL
+    
+    if question == "/voice":
+        voices = sorted(p.stem.replace("p_", "") for p in PROFILES_DIR.glob("p_*.md"))
+        print(f"[Active voice: {active_voice.replace('p_', '')}]  Available: {', '.join(voices)}")
+        continue
+
+    if question.startswith("/voice "):
+        parts = question.split(maxsplit=2)
+        target_voice = parts[1].strip().lower()
+        voice_file = PROFILES_DIR / f"p_{target_voice}.md"
+        if voice_file.exists():
+            active_voice = f"p_{target_voice}"
+            print(f"[Switched voice to '{target_voice}']")
+        else:
+            voices = sorted(p.stem.replace("p_", "") for p in PROFILES_DIR.glob("p_*.md"))
+            print(f"[Voice '{target_voice}' not found. Available: {', '.join(voices)}]")
+
+        if len(parts) > 2:
+            question = parts[2].strip()
+            if not question:
+                continue
+        else:
+            continue
 
     if question == "/model":
         print(f"[Active model: {active_model or 'none yet'}]")
@@ -276,6 +302,8 @@ while True:
 
     past_context = get_relevant_past(question)
 
+    
+
     system_parts = [
         "You are a helpful personal AI assistant.",
         "CRITICAL INSTRUCTIONS:",
@@ -284,11 +312,17 @@ while True:
         "3. The following User Information and Contexts are for your background knowledge only. Do NOT explicitly mention them unless relevant."
     ]
 
-    user_info_file = Path(__file__).parent / "user_info.md"
+    user_info_file = PROFILES_DIR / "user_info.md"
     if user_info_file.exists():
         user_info = user_info_file.read_text(encoding="utf-8").strip()
         if user_info:
             system_parts.append(f"User Information:\n{user_info}")
+
+    voice_file = PROFILES_DIR / f"{active_voice}.md"
+    if voice_file.exists():
+        voice_instructions = voice_file.read_text(encoding="utf-8").strip()
+        if voice_instructions:
+            system_parts.append(f"Active Persona (follow this strictly):\n{voice_instructions}")
 
     if past_context:
         system_parts.append(f"Relevant context from past conversations:\n{past_context}")

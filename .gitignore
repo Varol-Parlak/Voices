@@ -4,6 +4,7 @@ memory/
 context_stash.txt      
 to-do.txt
 user_info.md
+profiles
 
 __pycache__/
 *.py[cod]
