@@ -159,25 +159,83 @@ select option { background: #1a1a1a; }
     gap: 6px;
 }
 
-/* ── Empty state ── */
+/* ── Empty state and State Transitions ── */
 .empty-state {
+    position: absolute;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+}
+
+/* Base styles for Empty State Elements */
+.brand-text {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    gap: 16px;
-    animation: fadeIn 3s ease;
+    gap: 4px;
+    white-space: nowrap;
 }
 .empty-icon {
-    width: 70px; height: 70px;
     background: linear-gradient(135deg, var(--accent), #b06af7);
-    border-radius: 16px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px;
 }
-.empty-state h2 { font-size: 30px; font-weight: 600;}
-.empty-state p { color: var(--muted); font-size: 14px; }
+.empty-state h2 { font-size: 30px; font-weight: 600; margin: 0; }
+.empty-state p { color: var(--muted); font-size: 14px; margin: 0; }
+
+/* --- STATE: IS-EMPTY (Initial Top-Center) --- */
+.main.is-empty .empty-state {
+    top: 12vh; /* Responsive top positioning */
+    left: 50%;
+    transform: translateX(-50%);
+    transition: top 0.6s ease, left 0.6s ease, transform 0.6s ease;
+}
+.main.is-empty .empty-icon {
+    width: 70px; height: 70px; font-size: 26px; border-radius: 16px;
+    transition: all 0.6s ease;
+}
+.main.is-empty .brand-text {
+    opacity: 1;
+    transition: opacity 0.3s ease 0.6s;
+}
+.main.is-empty .chat-area {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.main.is-empty .input-bar {
+    bottom: 50%;
+    transform: translateY(50%);
+    background: transparent;
+    transition: bottom 0.6s ease, transform 0.6s ease, background 0.6s ease;
+}
+
+/* --- STATE: IS-ACTIVE (Chat Started) --- */
+.main.is-active .empty-state {
+    top: 32px;
+    left: 20px;
+    transform: translate(0, 0);
+    transition: top 0.6s ease 0.3s, left 0.6s ease 0.3s, transform 0.6s ease 0.3s;
+}
+.main.is-active .empty-icon {
+    width: 36px; height: 36px; font-size: 16px; border-radius: 9px;
+    transition: all 0.6s ease 0.3s;
+}
+.main.is-active .brand-text {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease; /* Texts disappear first */
+}
+.main.is-active .chat-area {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.6s ease 0.3s;
+}
+.main.is-active .input-bar {
+    bottom: 0;
+    transform: translateY(0);
+    transition: bottom 0.6s ease 0.3s, transform 0.6s ease 0.3s, background 0.6s ease 0.3s;
+}
 
 .suggestions {
     display: flex;
@@ -303,9 +361,10 @@ select option { background: #1a1a1a; }
 /* ── Input bar ── */
 .input-bar {
     position: absolute;
-    bottom: 0; left: 0; right: 0;
+    left: 0; right: 0;
     padding: 16px 20px 24px;
     background: linear-gradient(to top, var(--bg) 70%, transparent);
+    z-index: 90;
 }
 .input-inner {
     max-width: 720px;

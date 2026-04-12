@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 def search_web(query: str) -> str:
-    """Use this tool ONLY to search the internet for real-time information, current events, or specific facts you don't confidently know. Do NOT use this tool for conversational chit-chat, personal questions, or general knowledge."""
     print(f"\n[AI is searching the web for: '{query}'...]", flush=True)
     
     ctx = ssl.create_default_context()
@@ -23,14 +22,11 @@ def search_web(query: str) -> str:
         with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
             html = response.read().decode('utf-8', errors='ignore')
             
-            # Extract basic result snippets from DuckDuckGo lite HTML
             snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html, re.IGNORECASE | re.DOTALL)
             
             clean_snippets = []
             for s in snippets:
-                # Remove HTML tags
                 clean_s = re.sub(r'<[^>]+>', '', s)
-                # Decode basic HTML entities
                 clean_s = clean_s.replace('&#39;', "'").replace('&quot;', '"').replace('&amp;', '&')
                 clean_snippets.append(clean_s.strip())
                 
@@ -43,7 +39,6 @@ def search_web(query: str) -> str:
         return f"Search failed due to an error: {e}"
 
 def read_file(filepath: str) -> str:
-    """Reads and returns the entire text contents of a local file. Use this to analyze code before modifying it."""
     print(f"\n[AI is reading file: '{filepath}'...]", flush=True)
     try:
         path = Path(filepath)
@@ -54,7 +49,6 @@ def read_file(filepath: str) -> str:
         return f"Failed to read file: {e}"
 
 def append_file(filepath: str, content: str) -> str:
-    """Appends new text to the end of a local file. Use this to add lines without destroying existing content."""
     print(f"\n[AI is appending to file: '{filepath}'...]", flush=True)
     try:
         path = Path(filepath)
@@ -69,7 +63,6 @@ def append_file(filepath: str, content: str) -> str:
         return f"Failed to append to file: {e}"
 
 def replace_in_file(filepath: str, target: str, replacement: str) -> str:
-    """Replaces an exact target string with a new string in a file. Use this for specific edits."""
     print(f"\n[AI is editing file: '{filepath}'...]", flush=True)
     try:
         path = Path(filepath)

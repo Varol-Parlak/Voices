@@ -25,14 +25,19 @@
     if (!isTyping) sendMessage();
   });
 
-  newChatBtn.addEventListener('click', () => {
-    chatInner.innerHTML = '';
-    chatInner.appendChild(emptyState);
-    emptyState.style.display = 'flex';
-    msgInput.value = '';
-    msgInput.style.height = 'auto';
-    sendBtn.disabled = true;
-  });
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+      chatInner.innerHTML = '';
+      const mainLayout = document.querySelector('.main');
+      if (mainLayout) {
+        mainLayout.classList.remove('is-active');
+        mainLayout.classList.add('is-empty');
+      }
+      msgInput.value = '';
+      msgInput.style.height = 'auto';
+      sendBtn.disabled = true;
+    });
+  }
 
   // ── Fill input from suggestion chips ─────────────────────────────────────
   function fillInput(el) {
@@ -46,8 +51,12 @@
     const text = msgInput.value.trim();
     if (!text) return;
 
-    // Hide empty state
-    emptyState.style.display = 'none';
+    // Trigger transition to active state
+    const mainLayout = document.querySelector('.main');
+    if (mainLayout && mainLayout.classList.contains('is-empty')) {
+      mainLayout.classList.remove('is-empty');
+      mainLayout.classList.add('is-active');
+    }
 
     appendUserMsg(text);
 
