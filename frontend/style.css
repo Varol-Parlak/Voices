@@ -180,12 +180,11 @@ select option { background: #1a1a1a; }
     background: linear-gradient(135deg, var(--accent), #b06af7);
     display: flex; align-items: center; justify-content: center;
 }
-.empty-state h2 { font-size: 30px; font-weight: 600; margin: 0; }
-.empty-state p { color: var(--muted); font-size: 14px; margin: 0; }
+.empty-state h2 { font-size: 25px; font-weight: 600; margin: 0; }
+.empty-state p { color: var(--muted); font-size: 13px; margin: 0; }
 
-/* --- STATE: IS-EMPTY (Initial Top-Center) --- */
 .main.is-empty .empty-state {
-    top: 12vh; /* Responsive top positioning */
+    top: 18vh; 
     left: 50%;
     transform: translateX(-50%);
     transition: top 0.6s ease, left 0.6s ease, transform 0.6s ease;
@@ -212,19 +211,19 @@ select option { background: #1a1a1a; }
 
 /* --- STATE: IS-ACTIVE (Chat Started) --- */
 .main.is-active .empty-state {
-    top: 32px;
-    left: 20px;
+    top: 23px;
+    left: 24px;
     transform: translate(0, 0);
     transition: top 0.6s ease 0.3s, left 0.6s ease 0.3s, transform 0.6s ease 0.3s;
 }
 .main.is-active .empty-icon {
-    width: 36px; height: 36px; font-size: 16px; border-radius: 9px;
+    width: 50px; height: 50px; font-size: 30px; border-radius: 10px;
     transition: all 0.6s ease 0.3s;
 }
 .main.is-active .brand-text {
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease; /* Texts disappear first */
+    transition: opacity 0.3s ease; 
 }
 .main.is-active .chat-area {
     opacity: 1;
@@ -424,4 +423,26 @@ textarea::placeholder { color: var(--muted); }
 
 @keyframes fadeIn {
     from { opacity: 0; } to { opacity: 1; }
+}
+
+.settings-btn {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 95;
+}
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
 }

@@ -97,7 +97,6 @@
     wrap.className = 'msg-group';
     wrap.innerHTML = `
       <div class="msg-ai-wrap">
-        <div class="ai-avatar">✦</div>
         <div class="msg msg-ai">${renderMarkdown(text)}</div>
       </div>`;
     chatInner.appendChild(wrap);
@@ -109,7 +108,6 @@
     const el = document.createElement('div');
     el.className = 'typing-indicator';
     el.innerHTML = `
-      <div class="ai-avatar">✦</div>
       <div class="typing-dots">
         <span></span><span></span><span></span>
       </div>`;
@@ -138,16 +136,4 @@
       .split('\n\n')
       .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
       .join('');
-  }
-
-  // ── Mock replies (remove when wiring real backend) ────────────────────────
-  function getMockReply(input) {
-    const lower = input.toLowerCase();
-    if (lower.includes('hello') || lower.includes('hi'))
-      return "Hey! What's up?";
-    if (lower.includes('python'))
-      return "Sure. What do you need — a snippet, a full script, or an explanation of something specific?";
-    if (lower.includes('backprop'))
-      return "Backpropagation is just the chain rule from calculus applied backwards through a neural network.\n\nYou compute the loss, then work backwards layer by layer — each weight gets nudged by how much it contributed to the error. That's your gradient. Then you use it to update weights via gradient descent.\n\nWant the math or a code walkthrough?";
-    return "Got it. Hook this up to `control.py` and I'll give you a real answer.";
   }
