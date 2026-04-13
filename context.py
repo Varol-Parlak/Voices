@@ -60,7 +60,6 @@ def get_relevant_chunks(folders: list, query: str, top_k: int = TOP_K_CHUNKS) ->
                 continue
 
             if cache.get(str_path) != mtime:
-                # File is new or modified. Remove old chunks for this file if any.
                 try:
                     col.delete(where={"file": str_path})
                 except Exception:
@@ -86,8 +85,6 @@ def get_relevant_chunks(folders: list, query: str, top_k: int = TOP_K_CHUNKS) ->
                     ids.append(f"{str_path}_{i}")
 
                 if docs:
-                    # Insert the new embeddings
-                    # print(f"  [Indexing updated file: {file.name}]")  # Optional logging
                     col.add(documents=docs, metadatas=metadatas, ids=ids)
                     
                 cache[str_path] = mtime

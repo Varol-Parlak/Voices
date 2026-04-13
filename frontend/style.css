@@ -357,6 +357,66 @@ select option { background: #1a1a1a; }
 .msg p { margin-bottom: 6px; }
 .msg p:last-child { margin-bottom: 0; }
 
+/* ── Command Hints ── */
+.command-hints {
+    max-width: 720px;
+    margin: 0 auto 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.cmd-chip {
+    font-size: 11.5px;
+    font-weight: 500;
+    background: rgba(34, 34, 34, 0.6);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 12px;
+    cursor: default;
+    transition: all 0.2s ease;
+    position: relative;
+    letter-spacing: 0.3px;
+}
+
+.cmd-chip:hover {
+    background: rgba(42, 42, 42, 0.9);
+    color: var(--text);
+    border-color: #555;
+}
+
+/* Premium Tooltip */
+.cmd-chip::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-2px) scale(0.95);
+    background: #18181b;
+    color: #dedede;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 400;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid #333;
+    visibility: hidden;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.cmd-chip:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-6px) scale(1);
+}
+
 /* ── Input bar ── */
 .input-bar {
     position: absolute;

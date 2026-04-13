@@ -263,20 +263,6 @@ while True:
         print("[Today's context cleared]")
         continue
 
-    if question == "/history":
-        if not history:
-            print("[No history this session]")
-        for msg in history:
-            role    = "You" if msg["role"] == "user" else "AI"
-            snippet = msg["content"][:80]
-            suffix  = "..." if len(msg["content"]) > 80 else ""
-            print(f"  {role}: {snippet}{suffix}")
-        continue
-
-    if question == "/memory":
-        print(f"[Memory: {memory_stats()}]")
-        continue
-
     if question == "/projects":
         if projects:
             for kw, paths in projects.items():
