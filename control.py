@@ -3,13 +3,11 @@ import subprocess
 import json
 from pathlib import Path
 
-# Your custom imports
 from router import MODEL_TRIGGERS, DEFAULT_MODEL
-from tools import search_web, read_file, append_file, replace_in_file
+from tools import search_web, read_file, append_file, replace_in_file, list_dir
 from context import load_projects, detect_project, get_relevant_chunks
 from memory import load_today_history, save_exchange, get_relevant_past, clear_today
 
-# Import the new chat engine
 from chat_core import chat_once
 
 PROFILES_DIR = Path(__file__).parent / "profiles"
@@ -111,7 +109,7 @@ def process_message(question):
 
             agent_system = f"""You are an autonomous file-editing agent.
             Your Current Working Directory is: {Path.cwd()}{project_info}
-            You have access to read_file, append_file, and replace_in_file tools.
+            You have access to read_file, append_file, replace_in_file, and list_dir tools.
             CRITICAL INSTRUCTIONS:
             1. You MUST use the native tool calling schema. DO NOT output conversational text describing the JSON.
             2. DO NOT overwrite entire files. To edit a file, use read_file to see its contents, then use append_file for adding lines, or replace_in_file for tweaking existing lines.
@@ -129,7 +127,7 @@ def process_message(question):
             while steps < MAX_STEPS:
                 steps += 1
                 try:
-                    resp = ollama.chat(model=agent_model, messages=agent_messages, tools=[read_file, append_file, replace_in_file], stream=False)
+                    resp = ollama.chat(model=agent_model, messages=agent_messages, tools=[read_file, append_file, replace_in_file, list_dir], stream=False)
                 except Exception as e:
                     yield f"\n[Agent crashed: {e}]"
                     break
@@ -209,10 +207,12 @@ def process_message(question):
                     fn_name = tc["function"]["name"]
                     args    = tc["function"]["arguments"]
                     
-                    yield f"\n> **Agent used tool:** `{fn_name}`\n"
+                    yield f"\n> **Agent call:** `{fn_name}({args})`\n"
                     
                     if fn_name == "read_file":
                         res_body = read_file(args.get("filepath", ""))
+                    elif fn_name == "list_dir":
+                        res_body = list_dir(args.get("folder_path", args.get("path", "")))
                     elif fn_name == "append_file":
                         res_body = append_file(args.get("filepath", ""), args.get("content", ""))
                     elif fn_name == "replace_in_file":
@@ -221,21 +221,21 @@ def process_message(question):
                         res_body = "Error: Unknown tool."
                         
                     if res_body.startswith("Error:"):
+                        yield f"<br><span style='color:#ff6b6b;'>_[**Tool error:** {res_body}]_</span><br>\n"
                         res_body += (
                             "\n\nRECOVERY HINT: Your last action failed. "
                             "Use read_file to re-read the current file contents first, "
                             "then try a DIFFERENT approach. Do NOT repeat the same failing action."
                         )
-                        yield f"_[Tool error — stopping batch early]_\n"
                         agent_messages.append({"role": "tool", "content": res_body, "name": fn_name})
-                        break 
+                        break
                         
                     agent_messages.append({"role": "tool", "content": res_body, "name": fn_name})
             
                 if steps >= MAX_STEPS:
                     yield f"\n_[Agent reached max steps ({MAX_STEPS}) and stopped.]_"
 
-        return agent_stream() # Return the generator back to server.py!
+        return agent_stream()
 
     project_context = ""
     detected = detect_project(question, projects)

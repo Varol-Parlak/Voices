@@ -4,6 +4,7 @@ import ssl
 import re
 import json
 from pathlib import Path
+import os
 
 def search_web(query: str) -> str:
     print(f"\n[AI is searching the web for: '{query}'...]", flush=True)
@@ -38,15 +39,19 @@ def search_web(query: str) -> str:
     except Exception as e:
         return f"Search failed due to an error: {e}"
 
+import os
+
 def read_file(filepath: str) -> str:
-    print(f"\n[AI is reading file: '{filepath}'...]", flush=True)
-    try:
-        path = Path(filepath)
-        if not path.exists():
-            return f"Error: File '{filepath}' does not exist."
-        return path.read_text(encoding='utf-8', errors='ignore')
-    except Exception as e:
-        return f"Failed to read file: {e}"
+    if os.path.exists(filepath) and os.path.isfile(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            return f"Error reading file: {e}"
+
+    filename = os.path.basename(filepath)
+    
+    return f"Error: File '{filepath}' does not exist. (Tip: Use list_dir first to confirm the exact path)"
 
 def append_file(filepath: str, content: str) -> str:
     print(f"\n[AI is appending to file: '{filepath}'...]", flush=True)
@@ -61,6 +66,15 @@ def append_file(filepath: str, content: str) -> str:
         return f"Successfully appended content to '{filepath}'."
     except Exception as e:
         return f"Failed to append to file: {e}"
+
+def list_dir(folder_path: str) -> str:
+    """Lists all files and folders inside the given directory path."""
+    clean_path = os.path.normpath(folder_path.strip())
+    try:
+        items = os.listdir(clean_path)
+        return f"Contents of {clean_path}:\n" + "\n".join(items)
+    except Exception as e:
+        return f"Error: Could not read directory. {str(e)}"
 
 def replace_in_file(filepath: str, target: str, replacement: str) -> str:
     print(f"\n[AI is editing file: '{filepath}'...]", flush=True)
