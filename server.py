@@ -3,8 +3,12 @@ from flask_cors import CORS
 from control import process_message
 from memory import save_exchange
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='templates', static_url_path='')
 CORS(app)
+
+@app.route('/')
+def home():
+    return app.send_static_file('index.html')
 
 @app.route('/stream', methods=['POST'])
 def stream_chat():
@@ -24,3 +28,6 @@ def stream_chat():
         save_exchange(question, full_text) 
 
     return Response(generate(), mimetype='text/plain')
+
+if __name__ == '__main__':
+    app.run(port=5500, debug=True)

@@ -8,18 +8,11 @@ from tools import search_web
 PROFILES_DIR = Path(__file__).parent / "profiles"
 projects = load_projects()
 
-def chat_once(question, active_model, active_voice, history, web_context=""):
+def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
     """
     Core chat generator. Yields text chunks as they stream in.
     Both the CLI and Flask call this — no duplication.
     """
-    project_context = ""
-    detected = detect_project(question, projects)
-    if detected:
-        folders = list(projects[detected].values())
-        project_context = get_relevant_chunks(folders, question)
-
-    past_context = get_relevant_past(question)
 
     # Build system prompt
     system_parts = [

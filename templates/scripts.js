@@ -69,7 +69,7 @@ async function sendMessage() {
 
   try {
     // 1. Hit your Flask backend
-    const response = await fetch('http://localhost:5000/stream', {
+    const response = await fetch('http://localhost:5500/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text })
@@ -113,7 +113,6 @@ async function sendMessage() {
   } catch (error) {
     console.error("Error communicating with backend:", error);
     typingEl.remove();
-    appendAiMsg("System Error: Could not connect to the AI engine.");
   }
 
   isTyping = false;
@@ -128,19 +127,6 @@ async function sendMessage() {
     wrap.innerHTML = `
       <div class="msg-user-wrap">
         <div class="msg msg-user">${escHtml(text)}</div>
-      </div>`;
-    chatInner.appendChild(wrap);
-    scrollBottom();
-  }
-
-  // ── Append AI message ─────────────────────────────────────────────────────
-  function appendAiMsg(text) {
-    const voice = document.getElementById('voiceSelect').value;
-    const wrap = document.createElement('div');
-    wrap.className = 'msg-group';
-    wrap.innerHTML = `
-      <div class="msg-ai-wrap">
-        <div class="msg msg-ai">${renderMarkdown(text)}</div>
       </div>`;
     chatInner.appendChild(wrap);
     scrollBottom();
