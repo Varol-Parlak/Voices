@@ -39,7 +39,6 @@ def search_web(query: str) -> str:
     except Exception as e:
         return f"Search failed due to an error: {e}"
 
-import os
 
 def read_file(filepath: str) -> str:
     if os.path.exists(filepath) and os.path.isfile(filepath):

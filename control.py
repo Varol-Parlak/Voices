@@ -75,13 +75,23 @@ def process_message(question):
 
     if question == "/projects":
         if projects:
-            res = []
+            html_output = '<div class="projects-grid">'
             for kw, paths in projects.items():
-                res.append(f"  '{kw}':")
+                html_output += f'''
+                <div class="project-card" onclick="sendCommand('/agent show me the root folder and files of {kw} as bullet points')">
+                    <div class="project-header">
+                        <span class="project-icon">📂</span>
+                        <strong class="project-name">{kw.upper()}</strong>
+                    </div>
+                    <div class="project-paths">
+                '''
                 for label, path in paths.items():
-                    res.append(f"      {label}: {path}")
-            return "\n".join(res)
-        return "[No projects configured in projects.json]"
+                    html_output += f'<div class="path-item"><strong>path:</strong> {path}</div>'
+                
+                html_output += '</div></div>'
+            html_output += '</div>'
+            return html_output
+        return "[No projects configured]"
 
     web_context = ""
     if question.startswith("/search "):
@@ -96,7 +106,6 @@ def process_message(question):
         if not agent_query:
             return "[Please provide an agent instruction]"
 
-        # We wrap the agent in a generator so the UI can stream its progress!
         def agent_stream():
             yield f"**[Starting agent loop for: '{agent_query}']**\n\n"
             

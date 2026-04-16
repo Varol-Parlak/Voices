@@ -157,6 +157,8 @@ async function sendMessage() {
 
   // ── Basic markdown renderer ───────────────────────────────────────────────
   function renderMarkdown(text) {
+    if (text.trim().startsWith('<div')) return text;
+
     return text
       .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -187,3 +189,12 @@ async function sendMessage() {
       }
     });
   }
+
+window.sendCommand = function(cmd) {
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    
+    msgInput.value = cmd;
+    sendBtn.disabled = false;
+    sendMessage(); 
+};
