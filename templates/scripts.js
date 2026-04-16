@@ -166,3 +166,24 @@ async function sendMessage() {
       .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
       .join('');
   }
+
+  // ── Modal Logic ───────────────────────────────────────────────────────────
+  const settingsBtn = document.getElementById('settingsBtn');
+  const commandsModal = document.getElementById('commandsModal');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+  if (settingsBtn && commandsModal && modalCloseBtn) {
+    settingsBtn.addEventListener('click', () => {
+      commandsModal.classList.add('is-open');
+    });
+
+    modalCloseBtn.addEventListener('click', () => {
+      commandsModal.classList.remove('is-open');
+    });
+
+    commandsModal.addEventListener('click', (e) => {
+      if (e.target === commandsModal) {
+        commandsModal.classList.remove('is-open');
+      }
+    });
+  }

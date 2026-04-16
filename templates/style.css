@@ -506,3 +506,96 @@ textarea::placeholder { color: var(--muted); }
     background: rgba(255, 255, 255, 0.05);
     color: var(--text);
 }
+
+/* ── Modal ── */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.modal-overlay.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transform: translateY(20px);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+.modal-overlay.is-open .modal-content {
+    transform: translateY(0);
+}
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+}
+.modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+.modal-close:hover {
+    color: var(--text);
+}
+.modal-body {
+    padding: 20px;
+}
+.cmd-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+.cmd-table th {
+    text-align: left;
+    padding: 8px 12px;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.cmd-table td {
+    padding: 12px;
+    border-bottom: 1px solid #2a2a2a;
+    color: #ccc;
+}
+.cmd-table tr:last-child td {
+    border-bottom: none;
+}
+.cmd-table code {
+    background: #111;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    border: 1px solid #222;
+}

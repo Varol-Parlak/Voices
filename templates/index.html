@@ -27,13 +27,6 @@
 
     <!-- Input -->
     <div class="input-bar">
-      <div class="command-hints">
-        <span class="cmd-chip" data-title="Stops the active AI model">/stop</span>
-        <span class="cmd-chip" data-title="Clears the current session history">/context clear</span>
-        <span class="cmd-chip" data-title="Lists available context projects">/projects</span>
-        <span class="cmd-chip" data-title="Runs the autonomous file-editing agent">/agent</span>
-        <span class="cmd-chip" data-title="Changes the active AI personality">/voice</span>
-      </div>
       <div class="input-inner">
         <textarea
           id="msgInput"
@@ -58,6 +51,36 @@
   </main>
 
 </div>
+
+<!-- Commands Modal -->
+<div class="modal-overlay" id="commandsModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Commands</h3>
+      <button class="modal-close" id="modalCloseBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <table class="cmd-table">
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>/stop</b></td><td>Stops the active AI model</td></tr>
+          <tr><td><b>/context clear</b></td><td>Clears the current session history</td></tr>
+          <tr><td><b>/projects</b></td><td>Lists available context projects</td></tr>
+          <tr><td><b>/agent</b></td><td>Runs the autonomous file-editing agent</td></tr>
+          <tr><td><b>/voice</b></td><td>Changes the active AI personality</td></tr>
+          <tr><td><b>/models</b></td><td>Shows available models</td></tr>
+          <tr><td>/search</td><td>Searches the web</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script src="scripts.js"></script>
 </body>
 </html>
