@@ -46,37 +46,80 @@
     msgInput.focus();
   }
 
-  // ── Send message ──────────────────────────────────────────────────────────
-  function sendMessage() {
-    const text = msgInput.value.trim();
-    if (!text) return;
+  // ── Send message (Now with Real AI Streaming!) ────────────────────────────
+async function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text) return;
 
-    // Trigger transition to active state
-    const mainLayout = document.querySelector('.main');
-    if (mainLayout && mainLayout.classList.contains('is-empty')) {
-      mainLayout.classList.remove('is-empty');
-      mainLayout.classList.add('is-active');
-    }
-
-    appendUserMsg(text);
-
-    msgInput.value = '';
-    msgInput.style.height = 'auto';
-    sendBtn.disabled = true;
-    isTyping = true;
-
-    const typingEl = showTyping();
-
-    // Simulate AI response (replace this with real API call later)
-    const delay = 900 + Math.random() * 800;
-    setTimeout(() => {
-      typingEl.remove();
-      const reply = getMockReply(text);
-      appendAiMsg(reply);
-      isTyping = false;
-      sendBtn.disabled = !msgInput.value.trim();
-    }, delay);
+  // Trigger transition to active state
+  const mainLayout = document.querySelector('.main');
+  if (mainLayout && mainLayout.classList.contains('is-empty')) {
+    mainLayout.classList.remove('is-empty');
+    mainLayout.classList.add('is-active');
   }
+
+  appendUserMsg(text);
+
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  isTyping = true;
+
+  const typingEl = showTyping();
+
+  try {
+    // 1. Hit your Flask backend
+    const response = await fetch('http://localhost:5000/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+    }); 
+
+    // 2. Remove the loading dots the second the AI starts thinking
+    typingEl.remove();
+
+    // 3. Create an empty bubble for the AI's incoming response
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-group';
+    wrap.innerHTML = `
+      <div class="msg-ai-wrap">
+        <div class="msg msg-ai"></div>
+      </div>`;
+    chatInner.appendChild(wrap);
+    
+    // Grab the actual bubble where the text goes
+    const messageBubble = wrap.querySelector('.msg-ai'); 
+
+    // 4. Set up the stream reader
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let fullRawText = "";
+
+    // 5. Read the chunks in a loop
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // Decode the binary chunk into text
+        const chunk = decoder.decode(value, { stream: true });
+        fullRawText += chunk;
+        
+        // Render the markdown using your existing function!
+        messageBubble.innerHTML = renderMarkdown(fullRawText);
+        
+        // Keep auto-scrolling as the text grows
+        scrollBottom();
+    }
+  } catch (error) {
+    console.error("Error communicating with backend:", error);
+    typingEl.remove();
+    appendAiMsg("System Error: Could not connect to the AI engine.");
+  }
+
+  isTyping = false;
+  // Re-enable send button only if user typed something while it was generating
+  sendBtn.disabled = !msgInput.value.trim(); 
+}
 
   // ── Append user message ───────────────────────────────────────────────────
   function appendUserMsg(text) {

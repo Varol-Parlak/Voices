@@ -1,6 +1,10 @@
 from flask import Flask, request, Response
+from flask_cors import CORS
 from control import process_message
 from memory import save_exchange
+
+app = Flask(__name__)
+CORS(app)
 
 @app.route('/stream', methods=['POST'])
 def stream_chat():
