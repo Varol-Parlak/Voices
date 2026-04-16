@@ -245,37 +245,6 @@ def process_message(question):
 
     past_context = get_relevant_past(question)
 
-    _should_clarify = (
-        len(question) < 120
-        and not web_context
-        and not project_context
-    )
-    
-    if _should_clarify:
-        _clarify_system = (
-            "You are a clarification gate. "
-            "Read the user's message and decide if you have enough context to answer it well.\n"
-            "- If the message is clear and self-contained, reply with exactly one word: CLEAR\n"
-            "- If it is genuinely ambiguous and you need ONE specific piece of info, "
-            "reply with only that question. One sentence. No preamble.\n"
-            "Do not answer the question. Do not explain your reasoning."
-        )
-        history = load_today_history()
-        _clarify_msgs = [{"role": "system", "content": _clarify_system}]
-        if history:
-            _clarify_msgs += history[-4:] 
-        _clarify_msgs.append({"role": "user", "content": question})
-
-        try:
-            _cr = ollama.chat(model=active_model, messages=_clarify_msgs, stream=False)
-            _clarify_reply = _cr["message"].get("content", "").strip()
-        except Exception:
-            _clarify_reply = "CLEAR"
-
-        # If it asks a question, we just return the string to the UI. The user's answer will just be the next prompt!
-        if _clarify_reply.upper() != "CLEAR" and _clarify_reply:
-            return _clarify_reply
-
     history = load_today_history()
     
     stream_generator = chat_once(
