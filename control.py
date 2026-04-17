@@ -224,8 +224,13 @@ def process_message(question):
                         res_body = list_dir(args.get("folder_path", args.get("path", "")))
                     elif fn_name == "append_file":
                         res_body = append_file(args.get("filepath", ""), args.get("content", ""))
-                    elif fn_name == "replace_in_file":
-                        res_body = replace_in_file(args.get("filepath", ""), args.get("target", ""), args.get("replacement", ""))
+                    elif fn_name == "replace_in_file":  
+                        res_body = replace_in_file(
+                            filepath=args.get("filepath", ""),
+                            start_line=int(args.get("start_line", 0)),
+                            end_line=int(args.get("end_line", 0)),
+                            new_code=args.get("new_code", "")
+                        )                    
                     else:
                         res_body = "Error: Unknown tool."
                         

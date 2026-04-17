@@ -143,6 +143,11 @@ async function sendMessage() {
     return el;
   }
 
+  // ── Scroll to bottom ──────────────────────────────────────────────────────
+  function scrollBottom() {
+    chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
+  }
+
   // ── Escape HTML ───────────────────────────────────────────────────────────
   function escHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
