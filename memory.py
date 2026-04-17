@@ -11,7 +11,6 @@ COLLECTION     = "conversations"
 MAX_TODAY_HIST = 20
 TOP_K_PAST     = 10
 
-
 class OllamaEmbeddings:
     def name(self) -> str:
         return "ollama-nomic-embed-text"

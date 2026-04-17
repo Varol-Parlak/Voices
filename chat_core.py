@@ -13,7 +13,6 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     Core chat generator. Yields text chunks as they stream in.
     Both the CLI and Flask call this — no duplication.
     """
-
     system_parts = [
         "You are a helpful personal AI assistant.",
         "CRITICAL INSTRUCTIONS:",

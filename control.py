@@ -107,14 +107,12 @@ def process_message(question):
             return "[Please provide an agent instruction]"
 
         def agent_stream():
-            yield f"**[Starting agent loop for: '{agent_query}']**\n\n"
-            
             agent_project = detect_project(agent_query, projects)
             project_info = ""
             if agent_project:
                 dirs = list(projects[agent_project].values())
                 project_info = f"\n            User referenced project '{agent_project}'.\n            Project Directories: {dirs}\n            Use these paths to locate files."
-                yield f"_[Agent context loaded for project: '{agent_project}']_\n\n"
+                yield f"[Agent context loaded for project: '{agent_project}']\n\n"
 
             agent_system = f"""You are an autonomous file-editing agent.
             Your Current Working Directory is: {Path.cwd()}{project_info}
@@ -138,7 +136,7 @@ def process_message(question):
                 try:
                     resp = ollama.chat(model=agent_model, messages=agent_messages, tools=[read_file, append_file, replace_in_file, list_dir], stream=False)
                 except Exception as e:
-                    yield f"\n[Agent crashed: {e}]"
+                    yield f"\n[Agent died]\n"
                     break
                     
                 msg = resp.get("message", {})
@@ -207,7 +205,6 @@ def process_message(question):
                     for tc in tool_calls
                 ]
                 if current_signatures == last_call_signatures:
-                    yield f"\n_[Agent detected in infinite loop — same tool calls repeated. Stopping.]_"
                     break
                 last_call_signatures = current_signatures
 
@@ -215,8 +212,6 @@ def process_message(question):
                 for tc in tool_calls:
                     fn_name = tc["function"]["name"]
                     args    = tc["function"]["arguments"]
-                    
-                    yield f"\n> **Agent call:** `{fn_name}({args})`\n"
                     
                     if fn_name == "read_file":
                         res_body = read_file(args.get("filepath", ""))
@@ -235,7 +230,7 @@ def process_message(question):
                         res_body = "Error: Unknown tool."
                         
                     if res_body.startswith("Error:"):
-                        yield f"<br><span style='color:#ff6b6b;'>_[**Tool error:** {res_body}]_</span><br>\n"
+                        print(f"<br><span style='color:#ff6b6b;'>_[**Tool error:** {res_body}]_</span><br>\n")
                         res_body += (
                             "\n\nRECOVERY HINT: Your last action failed. "
                             "Use read_file to re-read the current file contents first, "
