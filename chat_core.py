@@ -14,11 +14,10 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     Both the CLI and Flask call this — no duplication.
     """
 
-    # Build system prompt
     system_parts = [
         "You are a helpful personal AI assistant.",
         "CRITICAL INSTRUCTIONS:",
-        "1. Keep your responses extremely concise and to the point.",
+        "1. Keep your responses clear.",
         "2. If web search doesn't contain the specific data requested, admit you don't know it.",
         "3. User Information and Contexts are background only. Don't mention them unless relevant."
     ]

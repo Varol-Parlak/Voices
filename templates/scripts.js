@@ -107,8 +107,6 @@ async function sendMessage() {
         // Render the markdown using your existing function!
         messageBubble.innerHTML = renderMarkdown(fullRawText);
         
-        // Keep auto-scrolling as the text grows
-        scrollBottom();
     }
   } catch (error) {
     console.error("Error communicating with backend:", error);
@@ -143,11 +141,6 @@ async function sendMessage() {
     chatInner.appendChild(el);
     scrollBottom();
     return el;
-  }
-
-  // ── Scroll to bottom ──────────────────────────────────────────────────────
-  function scrollBottom() {
-    chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
   }
 
   // ── Escape HTML ───────────────────────────────────────────────────────────
