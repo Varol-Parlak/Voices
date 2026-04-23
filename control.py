@@ -129,14 +129,21 @@ def process_message(question):
             agent_model = active_model or "llama3.1:8b"
             MAX_STEPS = 6
             steps = 0
-            last_call_signatures = []   
+            last_call_signatures = []
+            repeat_count = 0
+
+            def extract_arg(args_dict, *keys, default=""):
+                for k in keys:
+                    if k in args_dict and args_dict[k]:
+                        return args_dict[k]
+                return default
             
             while steps < MAX_STEPS:
                 steps += 1
                 try:
                     resp = ollama.chat(model=agent_model, messages=agent_messages, tools=[read_file, append_file, replace_in_file, list_dir], stream=False)
                 except Exception as e:
-                    yield f"\n[Agent died]\n"
+                    yield f"\n[Agent died: {type(e).__name__}: {e}]\n"
                     break
                     
                 msg = resp.get("message", {})
@@ -191,12 +198,31 @@ def process_message(question):
                     except Exception:
                         pass
 
+                if tool_calls:
+                    normalized_tcs = []
+                    for tc in tool_calls:
+                        if isinstance(tc, dict):
+                            normalized_tcs.append(tc)
+                        else:
+                            try:
+                                normalized_tcs.append({
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments
+                                    }
+                                })
+                            except Exception:
+                                pass
+                    tool_calls = normalized_tcs
+
+                # Yield any conversational text the agent output along with tool calls
+                text_content = msg.get("content", "")
+                if text_content:
+                    yield text_content + "\n"
+
                 # If no tools were called, the agent is done talking to us
                 if not tool_calls:
-                    final_text = msg.get("content", "")
-                    if final_text:
-                        yield final_text
-                    save_exchange(question, final_text)
+                    save_exchange(question, text_content)
                     break
                 
                 # Loop detection logic
@@ -205,7 +231,12 @@ def process_message(question):
                     for tc in tool_calls
                 ]
                 if current_signatures == last_call_signatures:
-                    break
+                    repeat_count += 1
+                    if repeat_count >= 2:
+                        yield "\n_[Agent got stuck in a tool loop and stopped.]_"
+                        break
+                else:
+                    repeat_count = 0
                 last_call_signatures = current_signatures
 
                 # Execute Tools
@@ -214,14 +245,21 @@ def process_message(question):
                     args    = tc["function"]["arguments"]
                     
                     if fn_name == "read_file":
-                        res_body = read_file(args.get("filepath", ""))
+                        path = extract_arg(args, "filepath", "file_path", "file", "path")
+                        res_body = read_file(path)
                     elif fn_name == "list_dir":
-                        res_body = list_dir(args.get("folder_path", args.get("path", "")))
+                        path = extract_arg(args, "folder_path", "path", "directory", "dir")
+                        if not path:
+                            path = "."
+                        res_body = list_dir(path)
                     elif fn_name == "append_file":
-                        res_body = append_file(args.get("filepath", ""), args.get("content", ""))
+                        res_body = append_file(
+                            extract_arg(args, "filepath", "file_path", "path"),
+                            args.get("content", "")
+                        )
                     elif fn_name == "replace_in_file":  
                         res_body = replace_in_file(
-                            filepath=args.get("filepath", ""),
+                            filepath=extract_arg(args, "filepath", "file_path", "path"),
                             start_line=int(args.get("start_line", 0)),
                             end_line=int(args.get("end_line", 0)),
                             new_code=args.get("new_code", "")
@@ -229,16 +267,14 @@ def process_message(question):
                     else:
                         res_body = "Error: Unknown tool."
                         
-                    if res_body.startswith("Error:"):
-                        print(f"<br><span style='color:#ff6b6b;'>_[**Tool error:** {res_body}]_</span><br>\n")
+                    has_error = res_body.startswith("Error:")
+                    if has_error:
                         res_body += (
                             "\n\nRECOVERY HINT: Your last action failed. "
                             "Use read_file to re-read the current file contents first, "
                             "then try a DIFFERENT approach. Do NOT repeat the same failing action."
                         )
-                        agent_messages.append({"role": "tool", "content": res_body, "name": fn_name})
-                        break
-                        
+
                     agent_messages.append({"role": "tool", "content": res_body, "name": fn_name})
             
                 if steps >= MAX_STEPS:

@@ -154,18 +154,83 @@ async function sendMessage() {
   }
 
   // ── Basic markdown renderer ───────────────────────────────────────────────
-  function renderMarkdown(text) {
-    if (text.trim().startsWith('<div')) return text;
+ function renderMarkdown(text) {
+  if (text.trim().startsWith('<div')) return text;
 
-    return text
-      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .split('\n\n')
-      .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-      .join('');
+  // Use marked.js if it's available (added in index.html)
+  if (typeof marked !== 'undefined') {
+    return marked.parse(text);
   }
+
+  let html = text;
+
+  // Code blocks first (before anything else touches them)
+  html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+    return `<pre><code class="lang-${lang || 'plaintext'}">${escHtml(code.trim())}</code></pre>`;
+  });
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, (_, code) => `<code>${escHtml(code)}</code>`);
+
+  // Bold and italic
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+  // Headings (allow optional leading spaces and multiple spaces after #)
+  html = html.replace(/^ *###### +(.+)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^ *##### +(.+)$/gm,  '<h5>$1</h5>');
+  html = html.replace(/^ *#### +(.+)$/gm,   '<h4>$1</h4>');
+  html = html.replace(/^ *### +(.+)$/gm,    '<h3>$1</h3>');
+  html = html.replace(/^ *## +(.+)$/gm,     '<h2>$1</h2>');
+  html = html.replace(/^ *# +(.+)$/gm,      '<h1>$1</h1>');
+
+  // Unordered lists
+  html = html.replace(/(^[-*] .+(\n[-*] .+)*)/gm, (block) => {
+    const items = block.split('\n')
+      .filter(l => l.trim())
+      .map(l => `<li>${l.replace(/^[-*] /, '')}</li>`)
+      .join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // Ordered lists
+  html = html.replace(/(^\d+\. .+(\n\d+\. .+)*)/gm, (block) => {
+    const items = block.split('\n')
+      .filter(l => l.trim())
+      .map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`)
+      .join('');
+    return `<ol>${items}</ol>`;
+  });
+
+  // Horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+
+  // Tables - add this before the paragraph section
+html = html.replace(/^\|(.+)\|\s*\n\|[-| :]+\|\s*\n((?:\|.+\|\s*\n?)*)/gm, (_, header, body) => {
+  const headers = header.split('|').map(h => h.trim()).filter(Boolean);
+  const rows = body.trim().split('\n').map(row =>
+    row.split('|').map(c => c.trim()).filter(Boolean)
+  );
+
+  const thead = headers.map(h => `<th>${h}</th>`).join('');
+  const tbody = rows.map(row =>
+    `<tr>${row.map(c => `<td>${c}</td>`).join('')}</tr>`
+  ).join('');
+
+  return `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+  });
+
+  // Paragraphs — skip lines that are already HTML tags
+  html = html.split('\n\n').map(block => {
+    block = block.trim();
+    if (!block) return '';
+    if (/^<(h[1-6]|ul|ol|pre|hr)/.test(block)) return block;
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+  
+  return html;
+}
 
   // ── Modal Logic ───────────────────────────────────────────────────────────
   const settingsBtn = document.getElementById('settingsBtn');
