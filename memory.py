@@ -67,14 +67,16 @@ def load_today_history() -> list:
 
 
 def save_exchange(user_msg: str, ai_msg: str):
-    today = date.today().isoformat()
+    today = date.today()
+    date_str = today.isoformat()
+    day_name = today.strftime("%A")
     ts    = int(time.time())
     doc   = f"User: {user_msg}\nAI: {ai_msg}"
 
     _get_col().add(
         documents=[doc],
-        metadatas=[{"date": today, "ts": ts}],
-        ids=[f"{today}_{ts}"],
+        metadatas=[{"date": date_str, "day_name": day_name, "ts": ts}],
+        ids=[f"{date_str}_{ts}"],
     )
 
 
@@ -99,7 +101,9 @@ def get_relevant_past(query: str) -> str:
 
     parts = []
     for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
-        parts.append(f"[{meta['date']}]\n{doc}")
+        day = meta.get("day_name", "")
+        day_str = f" ({day})" if day else ""
+        parts.append(f"[{meta['date']}{day_str}]\n{doc}")
 
     return "\n\n".join(parts)
 
