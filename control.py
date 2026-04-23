@@ -93,12 +93,12 @@ def process_message(question):
             return html_output
         return "[No projects configured]"
 
-    web_context = ""
+    is_search = False
     if question.startswith("/search "):
         query = question[8:].strip()
         if not query:
             return "[Please provide a search query]"
-        web_context = search_web(query)
+        is_search = True
         question = query  
 
     if question.startswith("/agent "):
@@ -246,24 +246,33 @@ def process_message(question):
 
         return agent_stream()
 
-    project_context = ""
-    detected = detect_project(question, projects)
-    if detected:
-        folders = list(projects[detected].values())
-        project_context = get_relevant_chunks(folders, question)
+    def final_stream():
+        web_context = ""
+        if is_search:
+            yield f"[Searching the internet for: '{question}'...] \n\n"
+            web_context = search_web(question)
 
-    past_context = get_relevant_past(question)
+        project_context = ""
+        detected = detect_project(question, projects)
+        if detected:
+            folders = list(projects[detected].values())
+            project_context = get_relevant_chunks(folders, question)
 
-    history = load_today_history()
-    
-    stream_generator = chat_once(
-        question=question, 
-        active_model=active_model, 
-        active_voice=active_voice, 
-        history=history, 
-        web_context=web_context, 
-        project_context=project_context,
-        past_context=past_context
-    )
-    
-    return stream_generator
+        past_context = get_relevant_past(question)
+
+        history = load_today_history()
+        
+        stream_generator = chat_once(
+            question=question, 
+            active_model=active_model, 
+            active_voice=active_voice, 
+            history=history, 
+            web_context=web_context, 
+            project_context=project_context,
+            past_context=past_context
+        )
+        
+        for chunk in stream_generator:
+            yield chunk
+
+    return final_stream()

@@ -8,7 +8,6 @@ import os
 
 def search_web(query: str) -> str:
     print(f"\n[AI is searching the web for: '{query}'...]", flush=True)
-    
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
