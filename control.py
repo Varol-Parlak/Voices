@@ -16,6 +16,10 @@ projects     = load_projects()
 active_model = DEFAULT_MODEL
 active_voice = "p_friend"  
 
+def get_active_model():
+    global active_model
+    return active_model or DEFAULT_MODEL
+
 def process_message(question):
     """
     Takes the user question from the UI, routes it to the right command or agent,

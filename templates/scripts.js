@@ -11,7 +11,7 @@
   msgInput.addEventListener('input', () => {
     msgInput.style.height = 'auto';
     msgInput.style.height = Math.min(msgInput.scrollHeight, 180) + 'px';
-    sendBtn.disabled = !msgInput.value.trim();
+    sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
   });
 
   msgInput.addEventListener('keydown', (e) => {
@@ -46,10 +46,44 @@
     msgInput.focus();
   }
 
+  // ── Image Upload Logic ────────────────────────────────────────────────────
+  const imageUpload = document.getElementById('imageUpload');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+  const imagePreview = document.getElementById('imagePreview');
+  const removeImageBtn = document.getElementById('removeImageBtn');
+
+  let selectedImageFile = null;
+
+  if (uploadBtn && imageUpload) {
+    uploadBtn.addEventListener('click', () => {
+      imageUpload.click();
+    });
+
+    imageUpload.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        selectedImageFile = e.target.files[0];
+        imagePreview.src = URL.createObjectURL(selectedImageFile);
+        imagePreviewContainer.style.display = 'block';      
+        sendBtn.disabled = false;
+      }
+    });
+  }
+
+  if (removeImageBtn) {
+    removeImageBtn.addEventListener('click', () => {
+      selectedImageFile = null;
+      imagePreview.src = '';
+      imagePreviewContainer.style.display = 'none';
+      imageUpload.value = '';
+      sendBtn.disabled = !msgInput.value.trim();
+    });
+  }
+
   // ── Send message (Now with Real AI Streaming!) ────────────────────────────
 async function sendMessage() {
   const text = msgInput.value.trim();
-  if (!text) return;
+  if (!text && !selectedImageFile) return;
 
   // Trigger transition to active state
   const mainLayout = document.querySelector('.main');
@@ -58,27 +92,48 @@ async function sendMessage() {
     mainLayout.classList.add('is-active');
   }
 
-  appendUserMsg(text);
+  let imgUrlForChat = null;
+  if (selectedImageFile) {
+    imgUrlForChat = URL.createObjectURL(selectedImageFile);
+  }
+  appendUserMsg(text, imgUrlForChat);
 
   msgInput.value = '';
   msgInput.style.height = 'auto';
   sendBtn.disabled = true;
   isTyping = true;
 
+  const currentImageFile = selectedImageFile;
+  if (selectedImageFile) {
+    selectedImageFile = null;
+    imagePreview.src = '';
+    imagePreviewContainer.style.display = 'none';
+    imageUpload.value = '';
+  }
+
   const typingEl = showTyping();
 
   try {
-    // 1. Hit your Flask backend
-    const response = await fetch('http://localhost:5500/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text })
-    }); 
+    let response;
+    if (currentImageFile) {
+      const formData = new FormData();
+      formData.append('file', currentImageFile);
+      formData.append('prompt', text);
 
-    // 2. Remove the loading dots the second the AI starts thinking
+      response = await fetch('http://localhost:5500/upload_image', {
+          method: 'POST',
+          body: formData
+      });
+    } else {
+      response = await fetch('http://localhost:5500/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text })
+      }); 
+    }
+
     typingEl.remove();
 
-    // 3. Create an empty bubble for the AI's incoming response
     const wrap = document.createElement('div');
     wrap.className = 'msg-group';
     wrap.innerHTML = `
@@ -86,27 +141,30 @@ async function sendMessage() {
         <div class="msg msg-ai"></div>
       </div>`;
     chatInner.appendChild(wrap);
-    
-    // Grab the actual bubble where the text goes
     const messageBubble = wrap.querySelector('.msg-ai'); 
 
-    // 4. Set up the stream reader
+    if (!response.ok) {
+        let errorMsg = response.statusText;
+        try {
+            const data = await response.json();
+            if (data.error) errorMsg = data.error;
+        } catch (e) {}
+        messageBubble.innerHTML = renderMarkdown(`Error: ${errorMsg}`);
+        return;
+    }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let fullRawText = "";
 
-    // 5. Read the chunks in a loop
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // Decode the binary chunk into text
         const chunk = decoder.decode(value, { stream: true });
         fullRawText += chunk;
         
-        // Render the markdown using your existing function!
         messageBubble.innerHTML = renderMarkdown(fullRawText);
-        
     }
   } catch (error) {
     console.error("Error communicating with backend:", error);
@@ -115,16 +173,27 @@ async function sendMessage() {
 
   isTyping = false;
   // Re-enable send button only if user typed something while it was generating
-  sendBtn.disabled = !msgInput.value.trim(); 
+  sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile; 
 }
 
   // ── Append user message ───────────────────────────────────────────────────
-  function appendUserMsg(text) {
+  function appendUserMsg(text, imgUrl = null) {
     const wrap = document.createElement('div');
     wrap.className = 'msg-group';
+    
+    let contentHtml = '';
+    if (imgUrl) {
+      contentHtml += `<img src="${imgUrl}" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 8px; display: block; align-self: flex-end;">`;
+    }
+    if (text) {
+      contentHtml += `<div>${escHtml(text)}</div>`;
+    }
+
     wrap.innerHTML = `
       <div class="msg-user-wrap">
-        <div class="msg msg-user">${escHtml(text)}</div>
+        <div class="msg msg-user" style="display: flex; flex-direction: column;">
+          ${contentHtml}
+        </div>
       </div>`;
     chatInner.appendChild(wrap);
     scrollBottom();

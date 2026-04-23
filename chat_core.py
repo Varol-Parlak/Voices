@@ -46,7 +46,12 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     messages += history
     messages.append({"role": "user", "content": question})
 
-    stream = ollama.chat(model=active_model, messages=messages, stream=True)
+    stream = ollama.chat(
+        model=active_model, 
+        messages=messages, 
+        stream=True,
+        options={"num_ctx": 8192}
+    )
     for chunk in stream:
         content = chunk["message"].get("content", "")
         if content:
