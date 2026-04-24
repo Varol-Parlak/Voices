@@ -6,37 +6,32 @@ import json
 from pathlib import Path
 import os
 
-def search_web(query: str) -> str:
-    print(f"\n[AI is searching the web for: '{query}'...]", flush=True)
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+import asyncio
+from langchain_ollama import ChatOllama
+from browser_use import Agent
+
+def search_web(query: str, model_name: str = "llama3.1:8b") -> str:
+    print(f"\n[AI is searching the web using Browser Agent for: '{query}' with model {model_name}...]", flush=True)
     
-    encoded_query = urllib.parse.quote(query)
-    req = urllib.request.Request(
-        f"https://html.duckduckgo.com/html/?q={encoded_query}",
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    )
-    
+    async def run_browser():
+        llm = ChatOllama(model=model_name, num_ctx=32000)
+        agent = Agent(
+            task=query,
+            llm=llm,
+        )
+        result = await agent.run()
+        
+        if hasattr(result, "final_result"):
+            final_ans = result.final_result()
+            if final_ans:
+                return str(final_ans)
+        return str(result)
+        
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
-            html = response.read().decode('utf-8', errors='ignore')
-            
-            snippets = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', html, re.IGNORECASE | re.DOTALL)
-            
-            clean_snippets = []
-            for s in snippets:
-                clean_s = re.sub(r'<[^>]+>', '', s)
-                clean_s = clean_s.replace('&#39;', "'").replace('&quot;', '"').replace('&amp;', '&')
-                clean_snippets.append(clean_s.strip())
-                
-            res = "\n---\n".join(clean_snippets[:5])
-            if not res:
-                return "No results found for the query."
-            return "Search Results:\n" + res
-            
+        res = asyncio.run(run_browser())
+        return f"Search Results:\n{res}"
     except Exception as e:
-        return f"Search failed due to an error: {e}"
+        return f"Browser search failed: {e}"
 
 def read_file(filepath: str) -> str:
     """

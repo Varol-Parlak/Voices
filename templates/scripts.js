@@ -66,6 +66,10 @@
         imagePreview.src = URL.createObjectURL(selectedImageFile);
         imagePreviewContainer.style.display = 'block';      
         sendBtn.disabled = false;
+        
+        // Warm up the vision model
+        fetch('http://localhost:5500/warmup_vision', { method: 'POST' })
+          .catch(err => console.error("Vision warmup failed:", err));
       }
     });
   }

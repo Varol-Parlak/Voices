@@ -48,6 +48,14 @@ def preload_model(model_name):
     except Exception:
         pass
 
+@app.route('/warmup_vision', methods=['POST'])
+def warmup_vision():
+    current_model = get_active_model()
+    if current_model:
+        subprocess.run(["ollama", "stop", current_model], check=False)
+    threading.Thread(target=preload_model, args=('minicpm-v',), daemon=True).start()
+    return jsonify({"status": "warming up minicpm-v"})
+
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     if 'file' not in request.files:

@@ -290,7 +290,7 @@ def process_message(question):
         web_context = ""
         if is_search:
             yield f"[Searching the internet for: '{question}'...] \n\n"
-            web_context = search_web(question)
+            web_context = search_web(question, active_model)
 
         project_context = ""
         detected = detect_project(question, projects)
