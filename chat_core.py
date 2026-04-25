@@ -52,7 +52,23 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         stream=True,
         options={"num_ctx": 8192}
     )
+    thinking_open = False
     for chunk in stream:
-        content = chunk["message"].get("content", "")
+        # Ollama 0.6+ exposes DeepSeek R1 thinking in a separate 'thinking' field
+        thinking = chunk["message"].get("thinking", "")
+        content  = chunk["message"].get("content", "")
+
+        if thinking:
+            if not thinking_open:
+                yield "<think>"
+                thinking_open = True
+            yield thinking
+
         if content:
+            if thinking_open:
+                yield "</think>"
+                thinking_open = False
             yield content
+
+    if thinking_open:
+        yield "</think>"

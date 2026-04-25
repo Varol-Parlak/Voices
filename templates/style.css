@@ -747,3 +747,83 @@ textarea::placeholder { color: var(--muted); }
     color: var(--accent);
     border: 1px solid #222;
 }
+
+/* ── DeepSeek Think Block ── */
+.think-wrap {
+    margin: 8px 0 4px;
+}
+.think-block {
+    background: rgba(20, 20, 28, 0.6);
+    border: 1px solid rgba(124, 106, 247, 0.18);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+}
+.think-block[open] {
+    border-color: rgba(124, 106, 247, 0.35);
+}
+.think-block summary {
+    cursor: pointer;
+    padding: 9px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #7c6af7;
+    background: rgba(30, 28, 53, 0.5);
+    user-select: none;
+    outline: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    transition: background 0.15s, color 0.15s;
+}
+.think-block summary::-webkit-details-marker { display: none; }
+.think-block summary:hover {
+    background: rgba(40, 36, 70, 0.6);
+    color: #9d8fff;
+}
+/* Arrow chevron */
+.think-block summary::after {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.2s ease;
+    margin-left: auto;
+    opacity: 0.7;
+}
+.think-block[open] summary::after {
+    transform: rotate(45deg) translateY(-2px);
+}
+/* Spinner shown while streaming (open state) */
+.think-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid rgba(124, 106, 247, 0.3);
+    border-top-color: #7c6af7;
+    border-radius: 50%;
+    animation: think-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes think-spin {
+    to { transform: rotate(360deg); }
+}
+/* Hide spinner when collapsed (thinking is done) */
+.think-block:not([open]) .think-spinner { display: none; }
+.think-content {
+    padding: 10px 14px 12px;
+    font-size: 13px;
+    color: #888;
+    border-top: 1px solid rgba(124, 106, 247, 0.1);
+    background: rgba(15, 14, 26, 0.4);
+    line-height: 1.6;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.think-content p { margin: 0.25em 0; }
+.think-content::-webkit-scrollbar { width: 4px; }
+.think-content::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }

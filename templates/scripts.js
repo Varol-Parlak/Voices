@@ -140,12 +140,7 @@ async function sendMessage() {
 
     const wrap = document.createElement('div');
     wrap.className = 'msg-group';
-    wrap.innerHTML = `
-      <div class="msg-ai-wrap">
-        <div class="msg msg-ai"></div>
-      </div>`;
     chatInner.appendChild(wrap);
-    const messageBubble = wrap.querySelector('.msg-ai'); 
 
     if (!response.ok) {
         let errorMsg = response.statusText;
@@ -153,7 +148,7 @@ async function sendMessage() {
             const data = await response.json();
             if (data.error) errorMsg = data.error;
         } catch (e) {}
-        messageBubble.innerHTML = renderMarkdown(`Error: ${errorMsg}`);
+        wrap.innerHTML = `<div class="msg-ai-wrap"><div class="msg msg-ai">${renderMarkdown('Error: ' + errorMsg)}</div></div>`;
         return;
     }
 
@@ -161,23 +156,102 @@ async function sendMessage() {
     const decoder = new TextDecoder("utf-8");
     let fullRawText = "";
 
+    // ── Two-lane think/answer DOM setup ──────────────────────────────────────
+    // Think block: visible and open while model thinks, collapses when answer starts
+    let thinkDetails = null;     // <details> element
+    let thinkContentEl = null;   // inner div for streaming think text
+    let answerBubble = null;     // main answer bubble
+    let thinkBuf = "";           // raw think text
+    let answerBuf = "";          // raw answer text
+    let inThink = false;
+    let thinkDone = false;
+
+    function getOrCreateThink() {
+        if (!thinkDetails) {
+            const thinkWrap = document.createElement('div');
+            thinkWrap.className = 'think-wrap';
+            thinkWrap.innerHTML = `
+              <details class="think-block" open>
+                <summary><span class="think-spinner"></span>Thinking...</summary>
+                <div class="think-content"></div>
+              </details>`;
+            wrap.appendChild(thinkWrap);
+            thinkDetails = thinkWrap.querySelector('details');
+            thinkContentEl = thinkWrap.querySelector('.think-content');
+        }
+        return thinkDetails;
+    }
+
+    function getOrCreateAnswer() {
+        if (!answerBubble) {
+            const answerWrap = document.createElement('div');
+            answerWrap.className = 'msg-ai-wrap';
+            answerWrap.innerHTML = `<div class="msg msg-ai"></div>`;
+            wrap.appendChild(answerWrap);
+            answerBubble = answerWrap.querySelector('.msg-ai');
+        }
+        return answerBubble;
+    }
+
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
         fullRawText += chunk;
-        
-        messageBubble.innerHTML = renderMarkdown(fullRawText);
+
+        // Parse think vs answer from the accumulated raw text
+        let rest = fullRawText;
+        const thinkStart = rest.indexOf('<think>');
+        const thinkEnd   = rest.indexOf('</think>');
+
+        if (thinkStart !== -1) {
+            // There IS a <think> block
+            if (thinkEnd !== -1) {
+                // Fully closed: extract think + answer
+                thinkBuf  = rest.slice(thinkStart + 7, thinkEnd);
+                answerBuf = rest.slice(thinkEnd + 8).trimStart();
+                thinkDone = true;
+
+                const det = getOrCreateThink();
+                // Collapse and update summary once thinking is done
+                det.removeAttribute('open');
+                det.querySelector('summary').innerHTML = '🧠 Thinking Process';
+                thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
+
+                if (answerBuf) {
+                    getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
+                }
+            } else {
+                // Still streaming inside <think>
+                thinkBuf = rest.slice(thinkStart + 7);
+                inThink = true;
+
+                getOrCreateThink();
+                thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
+            }
+        } else {
+            // No <think> at all — plain answer
+            answerBuf = rest;
+            getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
+        }
+
+        scrollBottom();
     }
+
+    // Finalize: if think never closed, close it now
+    if (inThink && !thinkDone && thinkDetails) {
+        thinkDetails.removeAttribute('open');
+        thinkDetails.querySelector('summary').innerHTML = '🧠 Thinking Process';
+    }
+
   } catch (error) {
     console.error("Error communicating with backend:", error);
     typingEl.remove();
   }
 
   isTyping = false;
-  // Re-enable send button only if user typed something while it was generating
-  sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile; 
+  sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
 }
 
   // ── Append user message ───────────────────────────────────────────────────
@@ -228,14 +302,16 @@ async function sendMessage() {
 
   // ── Basic markdown renderer ───────────────────────────────────────────────
  function renderMarkdown(text) {
+  if (!text) return '';
   if (text.trim().startsWith('<div')) return text;
+
+  // <think> tags are routed at stream level — strip any leftovers here
+  let html = text.replace(/<\/?think>/g, '');
 
   // Use marked.js if it's available (added in index.html)
   if (typeof marked !== 'undefined') {
-    return marked.parse(text);
+    return marked.parse(html);
   }
-
-  let html = text;
 
   // Code blocks first (before anything else touches them)
   html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
