@@ -84,10 +84,126 @@
     });
   }
 
+  // ── Command Chain Parser ─────────────────────────────────────────────────
+  // Instant commands that take exactly ONE word argument (the alias/name)
+  const ONE_WORD_ARG_CMDS = ['/model', '/voice'];
+  // Instant commands with no arguments
+  const NO_ARG_CMDS = ['/stop', '/context clear', '/projects'];
+
+  // Check if a segment is an instant (non-streaming) command
+  function isInstantCommand(seg) {
+    const all = [...ONE_WORD_ARG_CMDS, ...NO_ARG_CMDS];
+    return all.some(ic => seg === ic || seg.startsWith(ic + ' '));
+  }
+
+  // For ONE_WORD_ARG_CMDS: split "/model deepseek explain this"
+  //   into { cmd: "/model deepseek",  tail: "explain this" }
+  // Trailing text after the alias becomes a separate chat token.
+  function splitInstantSegment(seg) {
+    for (const ic of ONE_WORD_ARG_CMDS) {
+      if (seg === ic) return { cmd: seg, tail: '' };
+      if (seg.startsWith(ic + ' ')) {
+        const afterCmd  = seg.slice(ic.length + 1).trimStart(); // "deepseek explain this"
+        const spaceIdx  = afterCmd.search(/\s/);                // position of first space
+        if (spaceIdx === -1) return { cmd: seg, tail: '' };     // only alias, no tail
+        const alias = afterCmd.slice(0, spaceIdx);              // "deepseek"
+        const tail  = afterCmd.slice(spaceIdx + 1).trim();      // "explain this"
+        return { cmd: `${ic} ${alias}`, tail };
+      }
+    }
+    return { cmd: seg, tail: '' }; // /stop, /context clear, /projects
+  }
+
+  // Main parser: returns ordered array of tokens (command strings or plain chat text)
+  // Examples:
+  //   "/model deepseek tell me a joke"          → ["/model deepseek", "tell me a joke"]
+  //   "/voice friend /model qwen /search rag"   → ["/voice friend", "/model qwen", "/search rag"]
+  //   "/voice teacher /model qwen what is rag"  → ["/voice teacher", "/model qwen", "what is rag"]
+  function parseCommandChain(raw) {
+    const rawSegments = raw.split(/ (?=\/)/);
+    const tokens = [];
+    for (const seg of rawSegments) {
+      const trimmed = seg.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith('/') && isInstantCommand(trimmed)) {
+        const { cmd, tail } = splitInstantSegment(trimmed);
+        tokens.push(cmd);
+        if (tail) tokens.push(tail); // trailing chat text → its own streaming turn
+      } else {
+        tokens.push(trimmed); // /search, /agent, or plain chat
+      }
+    }
+    return tokens.length ? tokens : [raw];
+  }
+
   // ── Send message (Now with Real AI Streaming!) ────────────────────────────
 async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text && !selectedImageFile) return;
+
+  // ── Chain detection ──────────────────────────────────────────────────────
+  // If the message contains multiple / commands, split and run sequentially
+  const chain = parseCommandChain(text);
+  if (chain.length > 1) {
+    // Show the full chained input as user msg once
+    const mainLayout = document.querySelector('.main');
+    if (mainLayout && mainLayout.classList.contains('is-empty')) {
+      mainLayout.classList.remove('is-empty');
+      mainLayout.classList.add('is-active');
+    }
+    appendUserMsg(text);
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+    sendBtn.disabled = true;
+    isTyping = true;
+
+    // Wrap group for all chain results
+    const chainWrap = document.createElement('div');
+    chainWrap.className = 'msg-group chain-group';
+    chatInner.appendChild(chainWrap);
+
+    for (let i = 0; i < chain.length; i++) {
+      const cmd = chain[i];
+      const isLast = i === chain.length - 1;
+
+      if (isInstantCommand(cmd)) {
+        // Fire & show as a status pill
+        const pill = document.createElement('div');
+        pill.className = 'cmd-pill';
+        pill.innerHTML = `<span class="cmd-pill-icon">⚡</span><code>${escHtml(cmd)}</code><span class="cmd-pill-spinner"></span>`;
+        chainWrap.appendChild(pill);
+        scrollBottom();
+
+        try {
+          const res = await fetch('http://localhost:5500/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: cmd })
+          });
+          const reader = res.body.getReader();
+          const dec = new TextDecoder('utf-8');
+          let pillText = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            pillText += dec.decode(value, { stream: true });
+          }
+          pill.innerHTML = `<span class="cmd-pill-icon">✅</span><code>${escHtml(cmd)}</code><span class="cmd-pill-result">${escHtml(pillText.trim())}</span>`;
+        } catch (e) {
+          pill.innerHTML = `<span class="cmd-pill-icon">❌</span><code>${escHtml(cmd)}</code><span class="cmd-pill-result">Error</span>`;
+        }
+        scrollBottom();
+
+      } else {
+        // Streaming command (regular chat or /search or /agent) — stream inline
+        await streamIntoWrap(chainWrap, cmd, null);
+      }
+    }
+
+    isTyping = false;
+    sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
+    return;
+  }
 
   // Trigger transition to active state
   const mainLayout = document.querySelector('.main');
@@ -115,143 +231,135 @@ async function sendMessage() {
     imageUpload.value = '';
   }
 
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-group';
+  chatInner.appendChild(wrap);
+
+  await streamIntoWrap(wrap, text, currentImageFile);
+
+  isTyping = false;
+  sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
+}
+
+// ── Core streaming function (reusable for single + chained commands) ──────────
+async function streamIntoWrap(wrap, text, imageFile) {
   const typingEl = showTyping();
 
   try {
     let response;
-    if (currentImageFile) {
+    if (imageFile) {
       const formData = new FormData();
-      formData.append('file', currentImageFile);
+      formData.append('file', imageFile);
       formData.append('prompt', text);
-
       response = await fetch('http://localhost:5500/upload_image', {
-          method: 'POST',
-          body: formData
+        method: 'POST',
+        body: formData
       });
     } else {
       response = await fetch('http://localhost:5500/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: text })
-      }); 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      });
     }
 
     typingEl.remove();
 
-    const wrap = document.createElement('div');
-    wrap.className = 'msg-group';
-    chatInner.appendChild(wrap);
-
     if (!response.ok) {
-        let errorMsg = response.statusText;
-        try {
-            const data = await response.json();
-            if (data.error) errorMsg = data.error;
-        } catch (e) {}
-        wrap.innerHTML = `<div class="msg-ai-wrap"><div class="msg msg-ai">${renderMarkdown('Error: ' + errorMsg)}</div></div>`;
-        return;
+      let errorMsg = response.statusText;
+      try {
+        const data = await response.json();
+        if (data.error) errorMsg = data.error;
+      } catch (e) {}
+      wrap.innerHTML += `<div class="msg-ai-wrap"><div class="msg msg-ai">${renderMarkdown('Error: ' + errorMsg)}</div></div>`;
+      return;
     }
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let fullRawText = "";
+    const decoder = new TextDecoder('utf-8');
+    let fullRawText = '';
 
-    // ── Two-lane think/answer DOM setup ──────────────────────────────────────
-    // Think block: visible and open while model thinks, collapses when answer starts
-    let thinkDetails = null;     // <details> element
-    let thinkContentEl = null;   // inner div for streaming think text
-    let answerBubble = null;     // main answer bubble
-    let thinkBuf = "";           // raw think text
-    let answerBuf = "";          // raw answer text
+    // ── Two-lane think/answer DOM setup ────────────────────────────────────
+    let thinkDetails = null;
+    let thinkContentEl = null;
+    let answerBubble = null;
+    let thinkBuf = '';
+    let answerBuf = '';
     let inThink = false;
     let thinkDone = false;
 
     function getOrCreateThink() {
-        if (!thinkDetails) {
-            const thinkWrap = document.createElement('div');
-            thinkWrap.className = 'think-wrap';
-            thinkWrap.innerHTML = `
-              <details class="think-block" open>
-                <summary><span class="think-spinner"></span>Thinking...</summary>
-                <div class="think-content"></div>
-              </details>`;
-            wrap.appendChild(thinkWrap);
-            thinkDetails = thinkWrap.querySelector('details');
-            thinkContentEl = thinkWrap.querySelector('.think-content');
-        }
-        return thinkDetails;
+      if (!thinkDetails) {
+        const thinkWrap = document.createElement('div');
+        thinkWrap.className = 'think-wrap';
+        thinkWrap.innerHTML = `
+          <details class="think-block" open>
+            <summary><span class="think-spinner"></span>Thinking...</summary>
+            <div class="think-content"></div>
+          </details>`;
+        wrap.appendChild(thinkWrap);
+        thinkDetails = thinkWrap.querySelector('details');
+        thinkContentEl = thinkWrap.querySelector('.think-content');
+      }
+      return thinkDetails;
     }
 
     function getOrCreateAnswer() {
-        if (!answerBubble) {
-            const answerWrap = document.createElement('div');
-            answerWrap.className = 'msg-ai-wrap';
-            answerWrap.innerHTML = `<div class="msg msg-ai"></div>`;
-            wrap.appendChild(answerWrap);
-            answerBubble = answerWrap.querySelector('.msg-ai');
-        }
-        return answerBubble;
+      if (!answerBubble) {
+        const answerWrap = document.createElement('div');
+        answerWrap.className = 'msg-ai-wrap';
+        answerWrap.innerHTML = `<div class="msg msg-ai"></div>`;
+        wrap.appendChild(answerWrap);
+        answerBubble = answerWrap.querySelector('.msg-ai');
+      }
+      return answerBubble;
     }
 
     while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        fullRawText += chunk;
+      const chunk = decoder.decode(value, { stream: true });
+      fullRawText += chunk;
 
-        // Parse think vs answer from the accumulated raw text
-        let rest = fullRawText;
-        const thinkStart = rest.indexOf('<think>');
-        const thinkEnd   = rest.indexOf('</think>');
+      let rest = fullRawText;
+      const thinkStart = rest.indexOf('<think>');
+      const thinkEnd   = rest.indexOf('</think>');
 
-        if (thinkStart !== -1) {
-            // There IS a <think> block
-            if (thinkEnd !== -1) {
-                // Fully closed: extract think + answer
-                thinkBuf  = rest.slice(thinkStart + 7, thinkEnd);
-                answerBuf = rest.slice(thinkEnd + 8).trimStart();
-                thinkDone = true;
+      if (thinkStart !== -1) {
+        if (thinkEnd !== -1) {
+          thinkBuf  = rest.slice(thinkStart + 7, thinkEnd);
+          answerBuf = rest.slice(thinkEnd + 8).trimStart();
+          thinkDone = true;
 
-                const det = getOrCreateThink();
-                // Collapse and update summary once thinking is done
-                det.removeAttribute('open');
-                det.querySelector('summary').innerHTML = '🧠 Thinking Process';
-                thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
-
-                if (answerBuf) {
-                    getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
-                }
-            } else {
-                // Still streaming inside <think>
-                thinkBuf = rest.slice(thinkStart + 7);
-                inThink = true;
-
-                getOrCreateThink();
-                thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
-            }
+          const det = getOrCreateThink();
+          det.removeAttribute('open');
+          det.querySelector('summary').innerHTML = '🧠 Thinking Process';
+          thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
+          if (answerBuf) getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
         } else {
-            // No <think> at all — plain answer
-            answerBuf = rest;
-            getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
+          thinkBuf = rest.slice(thinkStart + 7);
+          inThink = true;
+          getOrCreateThink();
+          thinkContentEl.innerHTML = renderMarkdown(thinkBuf);
         }
+      } else {
+        answerBuf = rest;
+        getOrCreateAnswer().innerHTML = renderMarkdown(answerBuf);
+      }
 
-        scrollBottom();
+      scrollBottom();
     }
 
-    // Finalize: if think never closed, close it now
     if (inThink && !thinkDone && thinkDetails) {
-        thinkDetails.removeAttribute('open');
-        thinkDetails.querySelector('summary').innerHTML = '🧠 Thinking Process';
+      thinkDetails.removeAttribute('open');
+      thinkDetails.querySelector('summary').innerHTML = '🧠 Thinking Process';
     }
 
   } catch (error) {
-    console.error("Error communicating with backend:", error);
+    console.error('Error communicating with backend:', error);
     typingEl.remove();
   }
-
-  isTyping = false;
-  sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
 }
 
   // ── Append user message ───────────────────────────────────────────────────
