@@ -194,11 +194,14 @@ async function sendMessage() {
         }
         scrollBottom();
 
+      } else if (cmd.startsWith('/search ')) {
+        await searchWithPill(chainWrap, cmd);
+
       } else {
-        // Streaming command (regular chat or /search or /agent) — stream inline
+        // Streaming command (/agent or plain chat) — stream inline
         await streamIntoWrap(chainWrap, cmd, null);
       }
-    }
+    } // ── end for loop ──
 
     isTyping = false;
     sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
@@ -235,10 +238,106 @@ async function sendMessage() {
   wrap.className = 'msg-group';
   chatInner.appendChild(wrap);
 
-  await streamIntoWrap(wrap, text, currentImageFile);
+  if (text.startsWith('/search ')) {
+    await searchWithPill(wrap, text);
+  } else if (isInstantCommand(text)) {
+    // Single instant command — show as a pill, same as in chain mode
+    const pill = document.createElement('div');
+    pill.className = 'cmd-pill';
+    pill.innerHTML = `<span class="cmd-pill-icon">⚡</span><code>${escHtml(text)}</code><span class="cmd-pill-spinner"></span>`;
+    wrap.appendChild(pill);
+    scrollBottom();
+    try {
+      const res = await fetch('http://localhost:5500/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      });
+      const reader = res.body.getReader();
+      const dec = new TextDecoder('utf-8');
+      let pillText = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        pillText += dec.decode(value, { stream: true });
+      }
+      pill.innerHTML = `<span class="cmd-pill-icon">✅</span><code>${escHtml(text)}</code><span class="cmd-pill-result">${escHtml(pillText.trim())}</span>`;
+    } catch (e) {
+      pill.innerHTML = `<span class="cmd-pill-icon">❌</span><code>${escHtml(text)}</code><span class="cmd-pill-result">Error</span>`;
+    }
+  } else {
+    await streamIntoWrap(wrap, text, currentImageFile);
+  }
 
   isTyping = false;
   sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
+}
+
+// ── Search with pill ─────────────────────────────────────────────────────────
+// Shows a clean "Searching the web…" indicator, discards the backend status
+// line, then streams the AI answer into a normal bubble beneath the pill.
+async function searchWithPill(wrap, cmd) {
+  const pill = document.createElement('div');
+  pill.className = 'cmd-pill search-pill';
+  pill.innerHTML = `<span class="cmd-pill-icon">🔍</span><span class="cmd-pill-label">Searching the web…</span><span class="cmd-pill-spinner"></span>`;
+  wrap.appendChild(pill);
+  scrollBottom();
+
+  try {
+    const res = await fetch('http://localhost:5500/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: cmd })
+    });
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder('utf-8');
+    let buffer = '';
+    let pillDone = false;
+    let answerBubble = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+
+      if (!pillDone) {
+        // Backend yields "[Searching the internet for: '...'] \n\n" first
+        const nlIdx = buffer.indexOf('\n\n');
+        if (nlIdx !== -1) {
+          buffer = buffer.slice(nlIdx + 2); // discard status line, keep AI answer
+          pillDone = true;
+          pill.innerHTML = `<span class="cmd-pill-icon">🔍</span><span class="cmd-pill-label">Web search complete</span>`;
+        }
+      }
+
+      if (pillDone && buffer) {
+        if (!answerBubble) {
+          const answerWrap = document.createElement('div');
+          answerWrap.className = 'msg-ai-wrap';
+          answerWrap.innerHTML = `<div class="msg msg-ai"></div>`;
+          wrap.appendChild(answerWrap);
+          answerBubble = answerWrap.querySelector('.msg-ai');
+        }
+        answerBubble.innerHTML = renderMarkdown(buffer);
+        scrollBottom();
+      }
+    }
+
+    // If \n\n never appeared, treat whole buffer as the answer
+    if (!pillDone) {
+      pill.innerHTML = `<span class="cmd-pill-icon">🔍</span><span class="cmd-pill-label">Web search complete</span>`;
+      if (buffer.trim()) {
+        const answerWrap = document.createElement('div');
+        answerWrap.className = 'msg-ai-wrap';
+        answerWrap.innerHTML = `<div class="msg msg-ai">${renderMarkdown(buffer)}</div>`;
+        wrap.appendChild(answerWrap);
+      }
+    }
+
+  } catch (e) {
+    pill.innerHTML = `<span class="cmd-pill-icon">❌</span><span class="cmd-pill-label">Search failed</span>`;
+  }
 }
 
 // ── Core streaming function (reusable for single + chained commands) ──────────
@@ -399,8 +498,13 @@ async function streamIntoWrap(wrap, text, imageFile) {
   }
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
+  // Only scrolls if user is already near the bottom (within 120px).
+  // If they've scrolled up to read, we don't interrupt them.
   function scrollBottom() {
-    chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
+    const distFromBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
+    if (distFromBottom < 50) {
+      chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
+    }
   }
 
   // ── Escape HTML ───────────────────────────────────────────────────────────

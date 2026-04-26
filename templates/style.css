@@ -864,6 +864,12 @@ textarea::placeholder { color: var(--muted); }
     flex-shrink: 0;
 }
 
+.cmd-pill-label {
+    font-size: 12.5px;
+    color: #a89ef7;
+    font-weight: 500;
+}
+
 .cmd-pill-result {
     color: var(--muted);
     font-size: 12px;
