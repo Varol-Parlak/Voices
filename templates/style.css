@@ -876,7 +876,7 @@ textarea::placeholder { color: var(--muted); }
     padding-left: 4px;
     border-left: 1px solid rgba(124, 106, 247, 0.2);
     margin-left: 2px;
-    white-space: nowrap;
+    white-space: pre-wrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 300px;
@@ -892,4 +892,4 @@ textarea::placeholder { color: var(--muted); }
     border-radius: 50%;
     animation: think-spin 0.7s linear infinite;
     flex-shrink: 0;
-}
+}

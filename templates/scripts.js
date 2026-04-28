@@ -88,7 +88,7 @@
   // Instant commands that take exactly ONE word argument (the alias/name)
   const ONE_WORD_ARG_CMDS = ['/model', '/voice'];
   // Instant commands with no arguments
-  const NO_ARG_CMDS = ['/stop', '/context clear', '/projects'];
+  const NO_ARG_CMDS = ['/stop', '/context clear'];
 
   // Check if a segment is an instant (non-streaming) command
   function isInstantCommand(seg) {

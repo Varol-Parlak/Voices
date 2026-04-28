@@ -48,7 +48,8 @@ def process_message(question):
         return "[Please provide a voice name]"
 
     if question == "/model":
-        return f"[Active model: {active_model}]"
+        model_list = "\n".join(f"- {model}" for alias, model in MODEL_TRIGGERS.items())
+        return f"Active model:\n{active_model}\nAvailable Models:\n{model_list}"
 
     if question.startswith("/model "):
         parts = question.split(maxsplit=2)
@@ -116,7 +117,7 @@ def process_message(question):
             if agent_project:
                 dirs = list(projects[agent_project].values())
                 project_info = f"\n            User referenced project '{agent_project}'.\n            Project Directories: {dirs}\n            Use these paths to locate files."
-                yield f"[Agent context loaded for project: '{agent_project}']\n\n"
+                yield f"Agent context loaded for project: '{agent_project}'\n\n"
 
             agent_system = f"""You are an autonomous file-editing agent.
             Your Current Working Directory is: {Path.cwd()}{project_info}
