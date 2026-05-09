@@ -1,24 +1,34 @@
 import json
+import asyncio
 import ollama
 from pathlib import Path
 from context import load_projects, detect_project, get_relevant_chunks
 from memory import get_relevant_past
-from tools import search_web
+from mcp_client import MCPConnection
 
 PROFILES_DIR = Path(__file__).parent / "profiles"
 projects = load_projects()
 
+# 1. Initialize MCP Client (Make sure this points to your combined mcp_analyst.py file)
+mcp_script = str(Path(__file__).parent / "mcp_analyst.py")
+mcp = MCPConnection(mcp_script)
+
+def run_mcp(coro):
+    """Helper to run async MCP functions synchronously."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
 def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
-    """
-    Core chat generator. Yields text chunks as they stream in.
-    Both the CLI and Flask call this — no duplication.
-    """
     system_parts = [
         "You are a helpful personal AI assistant.",
         "CRITICAL INSTRUCTIONS:",
         "1. Keep your responses clear.",
         "2. If web search doesn't contain the specific data requested, admit you don't know it.",
-        "3. User Information and Contexts are background only. Don't mention them unless relevant."
+        "3. User Information and Contexts are background only. Don't mention them unless relevant.",
+        "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary."
     ]
 
     user_info_file = PROFILES_DIR / "user_info.md"
@@ -46,29 +56,75 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     messages += history
     messages.append({"role": "user", "content": question})
 
-    stream = ollama.chat(
-        model=active_model, 
-        messages=messages, 
-        stream=True,
+    # 2. Fetch available tools dynamically from your MCP server
+    tools = run_mcp(mcp.get_tools())
+
+    # 3. First pass: Ask Ollama if it wants to use tools (no streaming yet so it can output complete tool calls)
+    response = ollama.chat(
+        model=active_model,
+        messages=messages,
+        tools=tools,
         options={"num_ctx": 8192}
     )
-    thinking_open = False
-    for chunk in stream:
-        # Ollama 0.6+ exposes DeepSeek R1 thinking in a separate 'thinking' field
-        thinking = chunk["message"].get("thinking", "")
-        content  = chunk["message"].get("content", "")
 
+    # 4. Tool Execution Logic
+    if response.get("message", {}).get("tool_calls"):
+        messages.append(response["message"]) # Save AI's tool intent
+        
+        for tool_call in response["message"]["tool_calls"]:
+            t_name = tool_call["function"]["name"]
+            t_args = tool_call["function"]["arguments"]
+            
+            print(f"\n[AI is using tool: {t_name}]", flush=True)
+            
+            # Execute tool via MCP
+            t_result = run_mcp(mcp.call_tool(t_name, t_args))
+            
+            messages.append({
+                "role": "tool",
+                "content": str(t_result),
+                "name": t_name
+            })
+        
+        # Second pass: Stream the final response based on the new tool output
+        stream = ollama.chat(
+            model=active_model, 
+            messages=messages, 
+            stream=True,
+            options={"num_ctx": 8192}
+        )
+
+        # Handle the true stream chunks
+        thinking_open = False
+        for chunk in stream:
+            thinking = chunk["message"].get("thinking", "")
+            content  = chunk["message"].get("content", "")
+
+            if thinking:
+                if not thinking_open:
+                    yield "<think>\n"
+                    thinking_open = True
+                yield thinking
+
+            if content:
+                if thinking_open:
+                    yield "\n</think>\n"
+                    thinking_open = False
+                yield content
+
+        if thinking_open:
+            yield "\n</think>\n"
+
+    else:
+        # 5. If no tools were used, avoid a second call to Ollama.
+        # We already have the full text, so we artificially stream it to satisfy your Flask generator.
+        content = response["message"].get("content", "")
+        thinking = response["message"].get("thinking", "")
+        
         if thinking:
-            if not thinking_open:
-                yield "<think>"
-                thinking_open = True
-            yield thinking
-
-        if content:
-            if thinking_open:
-                yield "</think>"
-                thinking_open = False
-            yield content
-
-    if thinking_open:
-        yield "</think>"
+            yield "<think>\n" + thinking + "\n</think>\n"
+        
+        chunk_size = 15
+        for i in range(0, len(content), chunk_size):
+            yield content[i:i+chunk_size]
+        return
