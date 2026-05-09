@@ -1,6 +1,5 @@
 import subprocess
 from pathlib import Path
-
 from router import MODEL_TRIGGERS, DEFAULT_MODEL
 from context import load_projects, detect_project, get_relevant_chunks
 from memory import load_today_history, save_exchange, get_relevant_past, clear_today

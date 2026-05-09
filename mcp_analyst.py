@@ -4,7 +4,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from langchain_ollama import ChatOllama
 from browser_use import Agent
-
+import sys
 mcp = FastMCP("Analyst")
 
 @mcp.tool()
@@ -85,7 +85,7 @@ async def search_web(query: str, model_name: str = "llama3.1:8b") -> str:
     """
     Searches the web using a Browser Agent to find up-to-date information.
     """
-    print(f"\n[AI is searching the web using Browser Agent for: '{query}' with model {model_name}...]", flush=True)
+    print(f"\n[AI is searching the web using Browser Agent for: '{query}' with model {model_name}...]", file=sys.stderr,flush=True)
     
     llm = ChatOllama(model=model_name, num_ctx=32000)
     agent = Agent(
@@ -109,7 +109,7 @@ def append_file(filepath: str, content: str) -> str:
     Appends new text or code to the very end of an existing file. 
     Use this tool only when you need to add new content to the bottom of a file without modifying any existing code.
     """
-    print(f"\n[AI is appending to file: '{filepath}'...]", flush=True)
+    print(f"\n[AI is appending to file: '{filepath}'...]", file=sys.stderr,flush=True)
     try:
         path = Path(filepath)
         if not path.exists():
@@ -128,7 +128,7 @@ def replace_in_file(filepath: str, start_line: int, end_line: int, new_code: str
     Replaces a specific range of lines in a file with new code.
     CRITICAL: You must use the read_for_review tool first to determine the exact start_line and end_line.
     """
-    print(f"\n[AI is editing file: '{filepath}' (Lines {start_line}-{end_line})...]", flush=True)
+    print(f"\n[AI is editing file: '{filepath}' (Lines {start_line}-{end_line})...]", file=sys.stderr,flush=True)
     try:
         path = Path(filepath)
         if not path.exists():

@@ -2,13 +2,14 @@ import asyncio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from contextlib import AsyncExitStack
-
+import sys
+import os
 class MCPConnection:
     def __init__(self, script_path: str):
         self.server_params = StdioServerParameters(
-            command="python",
+            command=sys.executable,
             args=[script_path],
-            env=None
+            env=os.environ.copy()
         )
         self.session = None
         self.exit_stack = AsyncExitStack()

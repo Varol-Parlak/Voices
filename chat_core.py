@@ -1,6 +1,7 @@
 import json
 import asyncio
 import ollama
+import threading
 from pathlib import Path
 from context import load_projects, detect_project, get_relevant_chunks
 from memory import get_relevant_past
@@ -12,15 +13,19 @@ projects = load_projects()
 # 1. Initialize MCP Client (Make sure this points to your combined mcp_analyst.py file)
 mcp_script = str(Path(__file__).parent / "mcp_analyst.py")
 mcp = MCPConnection(mcp_script)
+_mcp_loop = asyncio.new_event_loop()
+
+def start_background_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+# Start the loop in a background thread that stays alive forever
+threading.Thread(target=start_background_loop, args=(_mcp_loop,), daemon=True).start()
 
 def run_mcp(coro):
-    """Helper to run async MCP functions synchronously."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
+    """Safely runs async MCP commands on the background thread."""
+    future = asyncio.run_coroutine_threadsafe(coro, _mcp_loop)
+    return future.result()
 def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
     system_parts = [
         "You are a helpful personal AI assistant.",
@@ -29,6 +34,7 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         "2. If web search doesn't contain the specific data requested, admit you don't know it.",
         "3. User Information and Contexts are background only. Don't mention them unless relevant.",
         "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary."
+        "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it."
     ]
 
     user_info_file = PROFILES_DIR / "user_info.md"
