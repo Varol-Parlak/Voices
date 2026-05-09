@@ -1,31 +1,56 @@
 import json
 import asyncio
-import ollama
 import threading
+import re
 from pathlib import Path
+from openai import OpenAI 
+
 from context import load_projects, detect_project, get_relevant_chunks
 from memory import get_relevant_past
 from mcp_client import MCPConnection
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+api_key = os.getenv("API_KEY")
+
+# ==========================================
+local_client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama", 
+)
+
+cloud_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=api_key , 
+)
+
+def get_active_client(model_name):
+    if "/" in model_name:
+        return cloud_client
+    return local_client
+
+# ==========================================
 
 PROFILES_DIR = Path(__file__).parent / "profiles"
 projects = load_projects()
 
-# 1. Initialize MCP Client (Make sure this points to your combined mcp_analyst.py file)
 mcp_script = str(Path(__file__).parent / "mcp_analyst.py")
 mcp = MCPConnection(mcp_script)
+
 _mcp_loop = asyncio.new_event_loop()
 
 def start_background_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
-# Start the loop in a background thread that stays alive forever
 threading.Thread(target=start_background_loop, args=(_mcp_loop,), daemon=True).start()
 
 def run_mcp(coro):
-    """Safely runs async MCP commands on the background thread."""
     future = asyncio.run_coroutine_threadsafe(coro, _mcp_loop)
     return future.result()
+
 def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
     system_parts = [
         "You are a helpful personal AI assistant.",
@@ -33,8 +58,9 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         "1. Keep your responses clear.",
         "2. If web search doesn't contain the specific data requested, admit you don't know it.",
         "3. User Information and Contexts are background only. Don't mention them unless relevant.",
-        "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary."
-        "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it."
+        "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary.",
+        "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it.",
+        f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools."
     ]
 
     user_info_file = PROFILES_DIR / "user_info.md"
@@ -62,75 +88,126 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     messages += history
     messages.append({"role": "user", "content": question})
 
-    # 2. Fetch available tools dynamically from your MCP server
     tools = run_mcp(mcp.get_tools())
+    
+    # Pick the right connection based on the model name
+    ai_client = get_active_client(active_model)
 
-    # 3. First pass: Ask Ollama if it wants to use tools (no streaming yet so it can output complete tool calls)
-    response = ollama.chat(
-        model=active_model,
-        messages=messages,
-        tools=tools,
-        options={"num_ctx": 8192}
-    )
+    MAX_STEPS = 6
+    steps = 0
 
-    # 4. Tool Execution Logic
-    if response.get("message", {}).get("tool_calls"):
-        messages.append(response["message"]) # Save AI's tool intent
-        
-        for tool_call in response["message"]["tool_calls"]:
-            t_name = tool_call["function"]["name"]
-            t_args = tool_call["function"]["arguments"]
-            
-            print(f"\n[AI is using tool: {t_name}]", flush=True)
-            
-            # Execute tool via MCP
-            t_result = run_mcp(mcp.call_tool(t_name, t_args))
-            
-            messages.append({
-                "role": "tool",
-                "content": str(t_result),
-                "name": t_name
-            })
-        
-        # Second pass: Stream the final response based on the new tool output
-        stream = ollama.chat(
-            model=active_model, 
-            messages=messages, 
-            stream=True,
-            options={"num_ctx": 8192}
+    active_tools = tools if tools else None
+    if "deepseek" in active_model.lower() and "/" not in active_model:
+        active_tools = None
+
+    while steps < MAX_STEPS:
+        response = ai_client.chat.completions.create(
+            model=active_model,
+            messages=messages,
+            tools=active_tools,
+            stream=True  # <--- FIX: True streaming enabled!
         )
 
-        # Handle the true stream chunks
-        thinking_open = False
-        for chunk in stream:
-            thinking = chunk["message"].get("thinking", "")
-            content  = chunk["message"].get("content", "")
+        content = ""
+        tool_calls = []
+        is_thinking = False
+        # Parse the stream as it arrives token-by-token
+        for chunk in response:
+            if not chunk.choices:
+                continue
+                
+            delta = chunk.choices[0].delta
 
-            if thinking:
-                if not thinking_open:
-                    yield "<think>\n"
-                    thinking_open = True
-                yield thinking
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                if not is_thinking:
+                    yield "<think>\n"  # Open the tag for the UI
+                    is_thinking = True
+                yield reasoning
 
-            if content:
-                if thinking_open:
-                    yield "\n</think>\n"
-                    thinking_open = False
-                yield content
+            # 1. Stream normal conversational text instantly to the UI
+            if delta.content:
+                if is_thinking:
+                    yield "\n</think>\n" # Close the tag before normal text starts
+                    is_thinking = False
+                content += delta.content
+                yield delta.content 
 
-        if thinking_open:
-            yield "\n</think>\n"
+            # 2. Quietly stitch together tool calls in the background
+            if delta.tool_calls:
+                for tc_chunk in delta.tool_calls:
+                    idx = tc_chunk.index
+                    
+                    # Make sure our list is long enough to hold this tool call
+                    while len(tool_calls) <= idx:
+                        tool_calls.append({
+                            "id": "", 
+                            "type": "function", 
+                            "function": {"name": "", "arguments": ""}
+                        })
+                    
+                    if tc_chunk.id:
+                        tool_calls[idx]["id"] += tc_chunk.id
+                        
+                    # FIX: We MUST check if 'function' exists before reading its properties!
+                    if tc_chunk.function:
+                        if tc_chunk.function.name:
+                            tool_calls[idx]["function"]["name"] += tc_chunk.function.name
+                        if tc_chunk.function.arguments:
+                            tool_calls[idx]["function"]["arguments"] += tc_chunk.function.arguments
+        # ==========================================
+        # SAFETY NET: Catch Leaked JSON
+        # ==========================================
+        if not tool_calls and "{" in content and '"name"' in content:
+            match = re.search(r'(\{[\s\S]*?"name"\s*:\s*"[^"]+"[\s\S]*?\})', content)
+            if match:
+                try:
+                    parsed = json.loads(match.group(1))
+                    if "name" in parsed:
+                        tool_calls = [{
+                            "id": "call_safetynet_123",
+                            "type": "function",
+                            "function": {
+                                "name": parsed["name"],
+                                "arguments": json.dumps(parsed.get("arguments", parsed.get("parameters", {})))
+                            }
+                        }]
+                        content = content.replace(match.group(1), "").strip()
+                except Exception:
+                    pass
 
-    else:
-        # 5. If no tools were used, avoid a second call to Ollama.
-        # We already have the full text, so we artificially stream it to satisfy your Flask generator.
-        content = response["message"].get("content", "")
-        thinking = response["message"].get("thinking", "")
-        
-        if thinking:
-            yield "<think>\n" + thinking + "\n</think>\n"
-        
-        chunk_size = 15
-        for i in range(0, len(content), chunk_size):
-            yield content[i:i+chunk_size]
-        return
+        # Save the AI's final intent to the chat history
+        msg_dict = {"role": "assistant", "content": content}
+        if tool_calls:
+            msg_dict["tool_calls"] = tool_calls
+        messages.append(msg_dict)
+
+        # Execute any tools it requested, then loop back so it can read the results!
+        if tool_calls:
+            for tc in tool_calls:
+                t_name = tc["function"]["name"]
+                t_args_str = tc["function"]["arguments"]
+                
+                try:
+                    t_args = json.loads(t_args_str)
+                except Exception:
+                    t_args = {}
+                
+                print(f"\n[{'Cloud' if '/' in active_model else 'Local'} AI is using tool: {t_name}]", flush=True)
+                t_result = run_mcp(mcp.call_tool(t_name, t_args))
+                
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "name": t_name,
+                    "content": str(t_result)
+                })
+            
+            steps += 1
+            continue 
+            
+        else:
+            # If no tools were called, the stream is finished and the user already saw it!
+            return
+
+    yield "\n_[Agent reached maximum steps and stopped.]_"

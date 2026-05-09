@@ -56,7 +56,8 @@ def process_message(question):
             if target in MODEL_TRIGGERS:
                 new_model = MODEL_TRIGGERS[target]
                 if new_model != active_model:
-                    if active_model is not None:
+                    if active_model is not None and "/" not in active_model:
+                        print(f"Freeing VRAM: Stopping local model {active_model}...")
                         subprocess.run(["ollama", "stop", active_model], check=False)
                     active_model = new_model
                     return f"[Switched to {new_model}]"
@@ -66,10 +67,15 @@ def process_message(question):
 
     if question == "/stop":
         if active_model:
-            subprocess.run(["ollama", "stop", active_model], check=False)
-            model_stopped = active_model
-            active_model = None
-            return f"[Stopped {model_stopped}]"
+            if "/" not in active_model:
+                subprocess.run(["ollama", "stop", active_model], check=False)
+                model_stopped = active_model
+                active_model = None
+                return f"[Stopped local model and cleared VRAM: {model_stopped}]"
+            else:
+                cloud_model = active_model
+                active_model = None
+                return f"[Disconnected from cloud model: {cloud_model}]"
         return "[No active model to stop]"
 
     if question == "/context clear":
@@ -121,7 +127,13 @@ def process_message(question):
         detected = detect_project(question, projects)
         if detected:
             folders = list(projects[detected].values())
-            project_context = get_relevant_chunks(folders, question)
+            chunks = get_relevant_chunks(folders, question)
+            project_context = (
+                f"CRITICAL: The user is asking about the project '{detected}'. "
+                f"The absolute directory paths for this project are: {folders}. "
+                f"Use these exact paths when calling your file exploration and reading tools.\n\n"
+                f"File Context:\n{chunks}"
+            )
 
         past_context = get_relevant_past(question)
         history = load_today_history()
