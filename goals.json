@@ -1,0 +1,17 @@
+{
+  "voices_project": {
+    "keywords": ["voices", "agent", "chatbot"],
+    "folders": ["C:/Users/Varol/Desktop/voices"],
+    "profile": "knowledge/voices_project/profile.md"
+  },
+  "atlas_project": {
+    "keywords": ["atlas", "opencv", "yolo", "camera"],
+    "folders": ["C:/Users/Varol/Desktop/Python/ml/Varol/Opencv/Varol/atlas"],
+    "profile": "knowledge/atlas_project/profile.md"
+  },
+  "exam_ide": {
+    "keywords": ["exam", "examide", "exam ide", "proctoring"],
+    "folders": ["C:/Users/Varol/Desktop/uniDevrim/ExamIDE"],
+    "profile": "knowledge/exam_ide/profile.md"
+  }
+}

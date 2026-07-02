@@ -51,7 +51,7 @@ def run_mcp(coro):
     future = asyncio.run_coroutine_threadsafe(coro, _mcp_loop)
     return future.result()
 
-def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
+def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context="", goal_profile=""):
     is_deepseek = "deepseek" in active_model.lower()
 
     system_parts = [
@@ -81,6 +81,8 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         if voice_instructions:
             system_parts.append(f"Active Persona:\n{voice_instructions}")
 
+    if goal_profile:
+        system_parts.append(f"Active Goal Context:\n{goal_profile}")
     if past_context:
         system_parts.append(f"Relevant past context:\n{past_context}")
     if project_context:

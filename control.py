@@ -1,16 +1,17 @@
 import subprocess
 from pathlib import Path
 from router import MODEL_TRIGGERS, DEFAULT_MODEL
-from context import load_projects, detect_project, get_relevant_chunks
+from context import load_goals, detect_goals, get_relevant_chunks, get_goal_profile, get_goal_folders, load_projects
 from memory import load_today_history, save_exchange, get_relevant_past, clear_today
 from chat_core import chat_once
 
 PROFILES_DIR = Path(__file__).parent / "profiles"
 
-projects     = load_projects()
+goals        = load_goals()
+projects     = load_projects()      # Legacy compat for /projects command
 active_model = DEFAULT_MODEL
 active_voice = "user_info"  
-last_active_projects = []
+last_active_goals = []
 
 def get_active_model():
     global active_model
@@ -48,7 +49,7 @@ def process_message(question):
         active_model = DEFAULT_MODEL
 
     # ==========================================
-    # SYSTEM COMMANDS (Unchanged)
+    # SYSTEM COMMANDS
     # ==========================================
     if question == "/voice":
         voices = sorted(p.stem.replace("p_", "") for p in PROFILES_DIR.glob("p_*.md"))
@@ -84,29 +85,39 @@ def process_message(question):
 
     if question == "/context clear":
         clear_today()
-        global last_active_projects
-        last_active_projects = []
-        return "[Today's context and active project lock cleared]"
+        global last_active_goals
+        last_active_goals = []
+        return "[Today's context and active goal lock cleared]"
 
-    if question == "/projects":
-        if projects:
+    if question == "/goals":
+        if goals:
             html_output = '<div class="projects-grid">'
-            for kw, paths in projects.items():
+            for goal_id, goal_data in goals.items():
+                keywords = ", ".join(goal_data.get("keywords", []))
+                folders = goal_data.get("folders", [])
+                display_name = goal_id.replace("_", " ").upper()
+                first_keyword = goal_data.get("keywords", [goal_id])[0]
+                
                 html_output += f'''
-                <div class="project-card" onclick="sendCommand('/agent show me the root folder and files of {kw} as bullet points')">
+                <div class="project-card" onclick="sendCommand('/agent show me the root folder and files of {first_keyword} as bullet points')">
                     <div class="project-header">
-                        <span class="project-icon">📂</span>
-                        <strong class="project-name">{kw.upper()}</strong>
+                        <span class="project-icon">🎯</span>
+                        <strong class="project-name">{display_name}</strong>
                     </div>
                     <div class="project-paths">
                 '''
-                for label, path in paths.items():
-                    html_output += f'<div class="path-item"><strong>path:</strong> {path}</div>'
+                for folder in folders:
+                    html_output += f'<div class="path-item"><strong>path:</strong> {folder}</div>'
+                html_output += f'<div class="path-item"><strong>keywords:</strong> {keywords}</div>'
                 
                 html_output += '</div></div>'
             html_output += '</div>'
             return html_output
-        return "[No projects configured]"
+        return "[No goals configured]"
+
+    # Keep /projects as an alias for /goals
+    if question == "/projects":
+        return process_message("/goals")
 
     # ==========================================
     # INTENT RE-ROUTING
@@ -129,32 +140,44 @@ def process_message(question):
     # MAIN PIPELINE
     # ==========================================
     def final_stream():
-        global last_active_projects
+        global last_active_goals
         
-        # Detect any projects mentioned in the prompt
-        detected = []
-        for kw in projects:
-            if kw.lower() in question.lower():
-                detected.append(kw)
+        # Detect which goals are mentioned in the prompt
+        detected = detect_goals(question, goals)
                 
         if detected:
-            last_active_projects = detected
+            last_active_goals = detected
             
-        current_projects = last_active_projects
+        current_goals = last_active_goals
         
+        # Build project context and goal profile from active goals
         project_context = ""
-        if current_projects:
-            project_context_parts = []
-            for p_name in current_projects:
-                folders = list(projects[p_name].values())
-                chunks = get_relevant_chunks(folders, question)
-                project_context_parts.append(
-                    f"CRITICAL: The user is asking about or working within the project '{p_name}'. "
-                    f"The absolute directory paths for this project are: {folders}. "
-                    f"Use these exact paths when calling your file exploration and reading tools.\n\n"
-                    f"File Context from '{p_name}':\n{chunks}"
-                )
-            project_context = "\n\n---\n\n".join(project_context_parts)
+        goal_profile = ""
+        
+        if current_goals:
+            context_parts = []
+            profile_parts = []
+            
+            for goal_id in current_goals:
+                folders = get_goal_folders(goal_id, goals)
+                if folders:
+                    chunks = get_relevant_chunks(folders, question, goal_id=goal_id)
+                    if chunks:
+                        context_parts.append(
+                            f"CRITICAL: The user is asking about or working within the goal '{goal_id}'. "
+                            f"The absolute directory paths for this goal are: {folders}. "
+                            f"Use these exact paths when calling your file exploration and reading tools.\n\n"
+                            f"File Context from '{goal_id}':\n{chunks}"
+                        )
+                
+                profile = get_goal_profile(goal_id, goals)
+                if profile:
+                    profile_parts.append(profile)
+            
+            if context_parts:
+                project_context = "\n\n---\n\n".join(context_parts)
+            if profile_parts:
+                goal_profile = "\n\n".join(profile_parts)
 
         past_context = get_relevant_past(question)
         history = load_today_history()
@@ -167,7 +190,8 @@ def process_message(question):
             history=history, 
             web_context="", 
             project_context=project_context,
-            past_context=past_context
+            past_context=past_context,
+            goal_profile=goal_profile
         )
         
         for chunk in stream_generator:
