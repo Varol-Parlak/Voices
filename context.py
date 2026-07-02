@@ -106,4 +106,17 @@ def get_relevant_chunks(folders: list, query: str, top_k: int = TOP_K_CHUNKS) ->
     if not results.get("documents") or not results["documents"][0]:
         return ""
 
-    return "\n\n".join(results["documents"][0])
+    # Filter out chunks that are semantically unrelated (threshold distance 400.0)
+    distances = results.get("distances")
+    valid_docs = []
+    if distances and distances[0]:
+        for doc, dist in zip(results["documents"][0], distances[0]):
+            if dist < 400.0:
+                valid_docs.append(doc)
+    else:
+        valid_docs = results["documents"][0]
+
+    if not valid_docs:
+        return ""
+
+    return "\n\n".join(valid_docs)
