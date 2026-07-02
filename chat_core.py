@@ -52,16 +52,22 @@ def run_mcp(coro):
     return future.result()
 
 def chat_once(question, active_model, active_voice, history, web_context="", project_context="", past_context=""):
+    is_deepseek = "deepseek" in active_model.lower()
+
     system_parts = [
         "You are a helpful personal AI assistant.",
         "CRITICAL INSTRUCTIONS:",
         "1. Keep your responses clear.",
         "2. If web search doesn't contain the specific data requested, admit you don't know it.",
-        "3. User Information and Contexts are background only. Don't mention them unless relevant.",
-        "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary.",
-        "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it.",
-        f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools."
+        "3. User Information and Contexts are background only. Don't mention them unless relevant."
     ]
+
+    if not is_deepseek:
+        system_parts.extend([
+            "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary.",
+            "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it.",
+            f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools."
+        ])
 
     user_info_file = PROFILES_DIR / "user_info.md"
     if user_info_file.exists():
@@ -96,17 +102,18 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
     MAX_STEPS = 6
     steps = 0
 
-    active_tools = tools if tools else None
-    if "deepseek" in active_model.lower() and "/" not in active_model:
-        active_tools = None
+    active_tools = tools if (tools and not is_deepseek) else None
 
     while steps < MAX_STEPS:
-        response = ai_client.chat.completions.create(
-            model=active_model,
-            messages=messages,
-            tools=active_tools,
-            stream=True  # <--- FIX: True streaming enabled!
-        )
+        api_kwargs = {
+            "model": active_model,
+            "messages": messages,
+            "stream": True
+        }
+        if active_tools:
+            api_kwargs["tools"] = active_tools
+
+        response = ai_client.chat.completions.create(**api_kwargs)
 
         content = ""
         tool_calls = []
@@ -158,7 +165,7 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         # ==========================================
         # SAFETY NET: Catch Leaked JSON
         # ==========================================
-        if not tool_calls and "{" in content and '"name"' in content:
+        if not is_deepseek and not tool_calls and "{" in content and '"name"' in content:
             match = re.search(r'(\{[\s\S]*?"name"\s*:\s*"[^"]+"[\s\S]*?\})', content)
             if match:
                 try:

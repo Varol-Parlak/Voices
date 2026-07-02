@@ -15,6 +15,27 @@ def get_active_model():
     global active_model
     return active_model or DEFAULT_MODEL
 
+def get_model_info():
+    global active_model
+    return {
+        "active_model": active_model or DEFAULT_MODEL,
+        "models": MODEL_TRIGGERS
+    }
+
+def change_model(target: str):
+    global active_model
+    target = target.lower()
+    if target in MODEL_TRIGGERS:
+        new_model = MODEL_TRIGGERS[target]
+        if new_model != active_model:
+            if active_model is not None and "/" not in active_model:
+                print(f"Freeing VRAM: Stopping local model {active_model}...")
+                subprocess.run(["ollama", "stop", active_model], check=False)
+            active_model = new_model
+            return {"status": "success", "model": active_model}
+        return {"status": "already_active", "model": active_model}
+    return {"status": "error", "message": f"Unknown model alias '{target}'"}
+
 def process_message(question):
     """
     Takes the user question from the UI, routes it to the right command,
@@ -45,25 +66,7 @@ def process_message(question):
                 return f"[Voice '{target_voice}' not found. Available: {', '.join(voices)}]"
         return "[Please provide a voice name]"
 
-    if question == "/model":
-        model_list = "\n".join(f"- {model}" for alias, model in MODEL_TRIGGERS.items())
-        return f"Active model:\n{active_model}\nAvailable Models:\n{model_list}"
 
-    if question.startswith("/model "):
-        parts = question.split(maxsplit=2)
-        if len(parts) > 1:
-            target = parts[1].lower()
-            if target in MODEL_TRIGGERS:
-                new_model = MODEL_TRIGGERS[target]
-                if new_model != active_model:
-                    if active_model is not None and "/" not in active_model:
-                        print(f"Freeing VRAM: Stopping local model {active_model}...")
-                        subprocess.run(["ollama", "stop", active_model], check=False)
-                    active_model = new_model
-                    return f"[Switched to {new_model}]"
-                return f"[Already using {new_model}]"
-            return f"[Unknown model alias '{target}'. Known: {', '.join(MODEL_TRIGGERS.keys())}]"
-        return "[Please provide a model alias]"
 
     if question == "/stop":
         if active_model:

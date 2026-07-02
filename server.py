@@ -1,6 +1,6 @@
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-from control import process_message, get_active_model
+from control import process_message, get_active_model, get_model_info, change_model
 from memory import save_exchange
 import re
 import os
@@ -91,6 +91,21 @@ def upload_image():
             return Response(generate(), mimetype='text/plain')
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+@app.route('/api/models', methods=['GET'])
+def api_get_models():
+    return jsonify(get_model_info())
+
+@app.route('/api/model', methods=['POST'])
+def api_set_model():
+    data = request.json or {}
+    model_alias = data.get('model')
+    if not model_alias:
+        return jsonify({"error": "Model alias is required"}), 400
+    res = change_model(model_alias)
+    if res.get("status") == "error":
+        return jsonify(res), 400
+    return jsonify(res)
 
 if __name__ == '__main__':
     app.run(port=5500, debug=True, use_reloader=False)

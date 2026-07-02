@@ -4,6 +4,7 @@
   const sendBtn    = document.getElementById('sendBtn');
   const emptyState = document.getElementById('emptyState');
   const newChatBtn = document.getElementById('newChatBtn');
+  const modelSelect = document.getElementById('modelSelect');
 
   let isTyping = false;
 
@@ -86,7 +87,7 @@
 
   // ── Command Chain Parser ─────────────────────────────────────────────────
   // Instant commands that take exactly ONE word argument (the alias/name)
-  const ONE_WORD_ARG_CMDS = ['/model', '/voice'];
+  const ONE_WORD_ARG_CMDS = ['/voice'];
   // Instant commands with no arguments
   const NO_ARG_CMDS = ['/stop', '/context clear'];
 
@@ -96,17 +97,17 @@
     return all.some(ic => seg === ic || seg.startsWith(ic + ' '));
   }
 
-  // For ONE_WORD_ARG_CMDS: split "/model deepseek explain this"
-  //   into { cmd: "/model deepseek",  tail: "explain this" }
+  // For ONE_WORD_ARG_CMDS: split "/voice friend explain this"
+  //   into { cmd: "/voice friend",  tail: "explain this" }
   // Trailing text after the alias becomes a separate chat token.
   function splitInstantSegment(seg) {
     for (const ic of ONE_WORD_ARG_CMDS) {
       if (seg === ic) return { cmd: seg, tail: '' };
       if (seg.startsWith(ic + ' ')) {
-        const afterCmd  = seg.slice(ic.length + 1).trimStart(); // "deepseek explain this"
+        const afterCmd  = seg.slice(ic.length + 1).trimStart(); // "friend explain this"
         const spaceIdx  = afterCmd.search(/\s/);                // position of first space
         if (spaceIdx === -1) return { cmd: seg, tail: '' };     // only alias, no tail
-        const alias = afterCmd.slice(0, spaceIdx);              // "deepseek"
+        const alias = afterCmd.slice(0, spaceIdx);              // "friend"
         const tail  = afterCmd.slice(spaceIdx + 1).trim();      // "explain this"
         return { cmd: `${ic} ${alias}`, tail };
       }
@@ -116,9 +117,9 @@
 
   // Main parser: returns ordered array of tokens (command strings or plain chat text)
   // Examples:
-  //   "/model deepseek tell me a joke"          → ["/model deepseek", "tell me a joke"]
-  //   "/voice friend /model qwen /search rag"   → ["/voice friend", "/model qwen", "/search rag"]
-  //   "/voice teacher /model qwen what is rag"  → ["/voice teacher", "/model qwen", "what is rag"]
+  //   "/voice friend tell me a joke"            → ["/voice friend", "tell me a joke"]
+  //   "/voice friend /search rag"               → ["/voice friend", "/search rag"]
+  //   "/voice teacher what is rag"              → ["/voice teacher", "what is rag"]
   function parseCommandChain(raw) {
     const rawSegments = raw.split(/ (?=\/)/);
     const tokens = [];
@@ -622,3 +623,62 @@ window.sendCommand = function(cmd) {
     sendBtn.disabled = false;
     sendMessage(); 
 };
+
+// ── Model Selection Logic ──────────────────────────────────────────────────
+async function loadModels() {
+  if (!modelSelect) return;
+  try {
+    const response = await fetch('http://localhost:5500/api/models');
+    const data = await response.json();
+    
+    modelSelect.innerHTML = '';
+    
+    const labels = {
+      'qwen': 'Qwen 2.5 Coder',
+      'deepseek': 'DeepSeek R1',
+      'llama': 'Llama 3.1',
+      'gemma': 'Gemma 4 31B',
+      'nemo': 'Nemotron 3',
+      'owl': 'Owl Alpha',
+      'qwen3': 'Qwen 3 Next'
+    };
+
+    for (const [alias, fullname] of Object.entries(data.models)) {
+      const option = document.createElement('option');
+      option.value = alias;
+      option.textContent = labels[alias] || alias;
+      modelSelect.appendChild(option);
+    }
+    
+    let activeAlias = 'llama';
+    for (const [alias, fullname] of Object.entries(data.models)) {
+      if (fullname === data.active_model) {
+        activeAlias = alias;
+        break;
+      }
+    }
+    modelSelect.value = activeAlias;
+  } catch (err) {
+    console.error('Failed to load models:', err);
+  }
+}
+
+if (modelSelect) {
+  modelSelect.addEventListener('change', async () => {
+    const selected = modelSelect.value;
+    try {
+      const res = await fetch('http://localhost:5500/api/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selected })
+      });
+      const data = await res.json();
+      console.log('Model changed:', data);
+    } catch (err) {
+      console.error('Failed to change model:', err);
+    }
+  });
+}
+
+// Initial models load
+loadModels();
