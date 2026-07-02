@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from openai import OpenAI 
 
-from context import load_projects, detect_project, get_relevant_chunks
+from context import load_projects, load_goals, detect_project, get_relevant_chunks
 from memory import get_relevant_past
 from mcp_client import MCPConnection
 from dotenv import load_dotenv
@@ -35,6 +35,11 @@ def get_active_client(model_name):
 
 PROFILES_DIR = Path(__file__).parent / "profiles"
 projects = load_projects()
+goals = load_goals()
+
+BASE_DIR = Path(__file__).parent
+GOALS_FILE = str(BASE_DIR / "goals.json")
+KNOWLEDGE_DIR = str(BASE_DIR / "knowledge")
 
 mcp_script = str(Path(__file__).parent / "mcp_analyst.py")
 mcp = MCPConnection(mcp_script)
@@ -66,7 +71,16 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         system_parts.extend([
             "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary.",
             "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it.",
-            f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools."
+            f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools.",
+            f"7. KNOWLEDGE SYSTEM: You manage the user's personal knowledge base. "
+            f"Goals config file: {GOALS_FILE}. Knowledge folder: {KNOWLEDGE_DIR}. "
+            f"Current goals: {json.dumps(goals, indent=2)}. "
+            f"When the user mentions a new project, interest, or goal: "
+            f"(a) Create a folder under {KNOWLEDGE_DIR}/<goal_id>/, "
+            f"(b) Write a profile.md inside it describing the goal's context, "
+            f"(c) Read the current {GOALS_FILE}, add the new goal entry with keywords/folders/profile path, and write it back. "
+            f"When the user asks to update an existing goal (add keywords, change folders, update profile), do the same: read, modify, write back. "
+            f"Always use the MCP file tools to do this autonomously. Do not ask the user to edit JSON manually."
         ])
 
     user_info_file = PROFILES_DIR / "user_info.md"
