@@ -4,7 +4,7 @@ MODEL_TRIGGERS = {
     "qwen":     "qwen2.5-coder:7b",
     "deepseek": "deepseek-r1:8b",
     "llama":    "llama3.1:8b",
-    "gemma": "google/gemma-4-31b-it:free",
+    "gemma": "google/gemma-4-26b-a4b:free",
     "nemo": "nvidia/nemotron-3-super-120b-a12b:free",
     "owl": "openrouter/owl-alpha",
     "qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",

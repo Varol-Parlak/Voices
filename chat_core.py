@@ -119,59 +119,87 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
                 }
             }
 
-        response = ai_client.chat.completions.create(**api_kwargs)
+        attempts = 0
+        max_attempts = 2
+        
+        while attempts < max_attempts:
+            try:
+                response = ai_client.chat.completions.create(**api_kwargs)
 
-        content = ""
-        tool_calls = []
-        is_thinking = False
-        # Parse the stream as it arrives token-by-token
-        for chunk in response:
-            if not chunk.choices:
-                continue
-                
-            delta = chunk.choices[0].delta
-
-            reasoning = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
-            if reasoning:
-                if not is_thinking:
-                    yield "<think>\n"  # Open the tag for the UI
-                    is_thinking = True
-                yield reasoning
-
-            # 1. Stream normal conversational text instantly to the UI
-            if delta.content:
-                if is_thinking:
-                    yield "\n</think>\n" # Close the tag before normal text starts
-                    is_thinking = False
-                content += delta.content
-                yield delta.content 
-
-            # 2. Quietly stitch together tool calls in the background
-            if delta.tool_calls:
-                for tc_chunk in delta.tool_calls:
-                    idx = tc_chunk.index
-                    
-                    # Make sure our list is long enough to hold this tool call
-                    while len(tool_calls) <= idx:
-                        tool_calls.append({
-                            "id": "", 
-                            "type": "function", 
-                            "function": {"name": "", "arguments": ""}
-                        })
-                    
-                    if tc_chunk.id:
-                        tool_calls[idx]["id"] += tc_chunk.id
+                content = ""
+                tool_calls = []
+                is_thinking = False
+                # Parse the stream as it arrives token-by-token
+                for chunk in response:
+                    if not chunk.choices:
+                        continue
                         
-                    # FIX: We MUST check if 'function' exists before reading its properties!
-                    if tc_chunk.function:
-                        if tc_chunk.function.name:
-                            tool_calls[idx]["function"]["name"] += tc_chunk.function.name
-                        if tc_chunk.function.arguments:
-                            tool_calls[idx]["function"]["arguments"] += tc_chunk.function.arguments
+                    delta = chunk.choices[0].delta
 
-        if is_thinking:
-            yield "\n</think>\n"
-            is_thinking = False
+                    reasoning = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
+                    if reasoning:
+                        if not is_thinking:
+                            yield "<think>\n"  # Open the tag for the UI
+                            is_thinking = True
+                        yield reasoning
+
+                    # 1. Stream normal conversational text instantly to the UI
+                    if delta.content:
+                        if is_thinking:
+                            yield "\n</think>\n" # Close the tag before normal text starts
+                            is_thinking = False
+                        content += delta.content
+                        yield delta.content 
+
+                    # 2. Quietly stitch together tool calls in the background
+                    if delta.tool_calls:
+                        for tc_chunk in delta.tool_calls:
+                            idx = tc_chunk.index
+                            
+                            # Make sure our list is long enough to hold this tool call
+                            while len(tool_calls) <= idx:
+                                tool_calls.append({
+                                    "id": "", 
+                                    "type": "function", 
+                                    "function": {"name": "", "arguments": ""}
+                                })
+                            
+                            if tc_chunk.id:
+                                tool_calls[idx]["id"] += tc_chunk.id
+                                
+                            # FIX: We MUST check if 'function' exists before reading its properties!
+                            if tc_chunk.function:
+                                if tc_chunk.function.name:
+                                    tool_calls[idx]["function"]["name"] += tc_chunk.function.name
+                                if tc_chunk.function.arguments:
+                                    tool_calls[idx]["function"]["arguments"] += tc_chunk.function.arguments
+
+                if is_thinking:
+                    yield "\n</think>\n"
+                    is_thinking = False
+                
+                # If we got here, the stream finished successfully!
+                break
+                
+            except Exception as e:
+                attempts += 1
+                fallback_model = "nvidia/nemotron-3-super-120b-a12b:free"
+                
+                if ai_client == cloud_client and api_kwargs["model"] != fallback_model and attempts < max_attempts:
+                    print(f"Cloud model {api_kwargs['model']} failed: {e}. Falling back to stable Nemotron...", flush=True)
+                    yield f"\n_[Cloud model failed: {e}. Falling back to Nemotron...]_\n"
+                    
+                    # Update parameters for the fallback model
+                    api_kwargs["model"] = fallback_model
+                    is_deepseek = False
+                    active_tools = tools
+                    if active_tools:
+                        api_kwargs["tools"] = active_tools
+                    else:
+                        api_kwargs.pop("tools", None)
+                else:
+                    # If we exhausted attempts or it's a local model, propagate the error
+                    raise e
         # ==========================================
         # SAFETY NET: Catch Leaked JSON
         # ==========================================
