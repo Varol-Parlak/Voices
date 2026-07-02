@@ -951,7 +951,6 @@ textarea::placeholder { color: var(--muted); }
 
 .custom-select-options {
     position: absolute;
-    bottom: calc(100% + 10px); /* open upward with small gap */
     right: 0;
     width: 100%;
     min-width: 180px;

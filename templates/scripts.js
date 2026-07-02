@@ -702,10 +702,33 @@ async function loadModels() {
 // Toggle dropdown on click
 const customSelect = document.getElementById('customSelect');
 const customSelectTrigger = document.getElementById('customSelectTrigger');
-if (customSelect && customSelectTrigger) {
+const customSelectOptions = document.getElementById('customSelectOptions');
+
+if (customSelect && customSelectTrigger && customSelectOptions) {
   customSelectTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
-    customSelect.classList.toggle('is-open');
+    
+    const isOpen = customSelect.classList.toggle('is-open');
+    if (isOpen) {
+      // Calculate vertical offset to align active option with trigger
+      const activeOption = customSelectOptions.querySelector('.custom-option.is-selected');
+      if (activeOption) {
+        const triggerHeight = customSelectTrigger.offsetHeight;
+        const optionHeight = activeOption.offsetHeight;
+        const optionOffsetTop = activeOption.offsetTop;
+        
+        // Calculate offset so that centers align:
+        // optionOffsetTop + (optionHeight / 2) should align with (triggerHeight / 2)
+        const topOffset = (triggerHeight / 2) - (optionOffsetTop + (optionHeight / 2));
+        customSelectOptions.style.top = `${topOffset}px`;
+      } else {
+        // Fallback: center the whole options container
+        const containerHeight = customSelectOptions.offsetHeight;
+        const triggerHeight = customSelectTrigger.offsetHeight;
+        const topOffset = (triggerHeight / 2) - (containerHeight / 2);
+        customSelectOptions.style.top = `${topOffset}px`;
+      }
+    }
   });
 }
 
