@@ -112,6 +112,12 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         }
         if active_tools:
             api_kwargs["tools"] = active_tools
+        if ai_client == cloud_client:
+            api_kwargs["extra_body"] = {
+                "reasoning": {
+                    "exclude": False
+                }
+            }
 
         response = ai_client.chat.completions.create(**api_kwargs)
 
@@ -125,7 +131,7 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
                 
             delta = chunk.choices[0].delta
 
-            reasoning = getattr(delta, "reasoning_content", None)
+            reasoning = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
             if reasoning:
                 if not is_thinking:
                     yield "<think>\n"  # Open the tag for the UI
@@ -162,6 +168,10 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
                             tool_calls[idx]["function"]["name"] += tc_chunk.function.name
                         if tc_chunk.function.arguments:
                             tool_calls[idx]["function"]["arguments"] += tc_chunk.function.arguments
+
+        if is_thinking:
+            yield "\n</think>\n"
+            is_thinking = False
         # ==========================================
         # SAFETY NET: Catch Leaked JSON
         # ==========================================
