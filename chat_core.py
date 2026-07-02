@@ -67,11 +67,18 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
         "3. User Information and Contexts are background only. Don't mention them unless relevant."
     ]
 
+    is_cloud = "/" in active_model
+
     if not is_deepseek:
         system_parts.extend([
             "4. You have access to tools via MCP. Use them autonomously to explore code, read files, edit code, or search the web when necessary.",
             "5. NEVER output tool JSON in your conversational text. You MUST use the native API tool execution. Do not announce that you are using a tool, just do it.",
-            f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools.",
+            f"6. SYSTEM MAP: Here are the absolute paths to the user's local projects: {json.dumps(projects)}. Use these exact absolute paths when using file tools."
+        ])
+
+    # Knowledge management is cloud-only — local models are too small to safely edit JSON configs
+    if is_cloud and not is_deepseek:
+        system_parts.append(
             f"7. KNOWLEDGE SYSTEM: You manage the user's personal knowledge base. "
             f"Goals config file: {GOALS_FILE}. Knowledge folder: {KNOWLEDGE_DIR}. "
             f"Current goals: {json.dumps(goals, indent=2)}. "
@@ -81,7 +88,7 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
             f"(c) Read the current {GOALS_FILE}, add the new goal entry with keywords/folders/profile path, and write it back. "
             f"When the user asks to update an existing goal (add keywords, change folders, update profile), do the same: read, modify, write back. "
             f"Always use the MCP file tools to do this autonomously. Do not ask the user to edit JSON manually."
-        ])
+        )
 
     user_info_file = PROFILES_DIR / "user_info.md"
     if user_info_file.exists():
