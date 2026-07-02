@@ -10,6 +10,7 @@ PROFILES_DIR = Path(__file__).parent / "profiles"
 projects     = load_projects()
 active_model = DEFAULT_MODEL
 active_voice = "user_info"  
+last_active_projects = []
 
 def get_active_model():
     global active_model
@@ -83,7 +84,9 @@ def process_message(question):
 
     if question == "/context clear":
         clear_today()
-        return "[Today's context cleared]"
+        global last_active_projects
+        last_active_projects = []
+        return "[Today's context and active project lock cleared]"
 
     if question == "/projects":
         if projects:
@@ -126,17 +129,32 @@ def process_message(question):
     # MAIN PIPELINE
     # ==========================================
     def final_stream():
-        project_context = ""
-        detected = detect_project(question, projects)
+        global last_active_projects
+        
+        # Detect any projects mentioned in the prompt
+        detected = []
+        for kw in projects:
+            if kw.lower() in question.lower():
+                detected.append(kw)
+                
         if detected:
-            folders = list(projects[detected].values())
-            chunks = get_relevant_chunks(folders, question)
-            project_context = (
-                f"CRITICAL: The user is asking about the project '{detected}'. "
-                f"The absolute directory paths for this project are: {folders}. "
-                f"Use these exact paths when calling your file exploration and reading tools.\n\n"
-                f"File Context:\n{chunks}"
-            )
+            last_active_projects = detected
+            
+        current_projects = last_active_projects
+        
+        project_context = ""
+        if current_projects:
+            project_context_parts = []
+            for p_name in current_projects:
+                folders = list(projects[p_name].values())
+                chunks = get_relevant_chunks(folders, question)
+                project_context_parts.append(
+                    f"CRITICAL: The user is asking about or working within the project '{p_name}'. "
+                    f"The absolute directory paths for this project are: {folders}. "
+                    f"Use these exact paths when calling your file exploration and reading tools.\n\n"
+                    f"File Context from '{p_name}':\n{chunks}"
+                )
+            project_context = "\n\n---\n\n".join(project_context_parts)
 
         past_context = get_relevant_past(question)
         history = load_today_history()
