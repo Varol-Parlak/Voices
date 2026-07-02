@@ -4,7 +4,6 @@
   const sendBtn    = document.getElementById('sendBtn');
   const emptyState = document.getElementById('emptyState');
   const newChatBtn = document.getElementById('newChatBtn');
-  const modelSelect = document.getElementById('modelSelect');
 
   let isTyping = false;
 
@@ -626,12 +625,15 @@ window.sendCommand = function(cmd) {
 
 // ── Model Selection Logic ──────────────────────────────────────────────────
 async function loadModels() {
-  if (!modelSelect) return;
+  const customSelectTrigger = document.getElementById('customSelectTrigger');
+  const customSelectOptions = document.getElementById('customSelectOptions');
+  if (!customSelectTrigger || !customSelectOptions) return;
+  
   try {
     const response = await fetch('http://localhost:5500/api/models');
     const data = await response.json();
     
-    modelSelect.innerHTML = '';
+    customSelectOptions.innerHTML = '';
     
     const labels = {
       'qwen': 'Qwen 2.5 Coder',
@@ -643,42 +645,76 @@ async function loadModels() {
       'qwen3': 'Qwen 3 Next'
     };
 
-    for (const [alias, fullname] of Object.entries(data.models)) {
-      const option = document.createElement('option');
-      option.value = alias;
-      option.textContent = labels[alias] || alias;
-      modelSelect.appendChild(option);
-    }
-    
     let activeAlias = 'llama';
     for (const [alias, fullname] of Object.entries(data.models)) {
       if (fullname === data.active_model) {
         activeAlias = alias;
-        break;
       }
     }
-    modelSelect.value = activeAlias;
+
+    // Populate options
+    for (const [alias, fullname] of Object.entries(data.models)) {
+      const opt = document.createElement('div');
+      opt.className = `custom-option${alias === activeAlias ? ' is-selected' : ''}`;
+      opt.dataset.value = alias;
+      opt.textContent = labels[alias] || alias;
+      
+      opt.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const selected = opt.dataset.value;
+        
+        // Update selected style in UI
+        const allOpts = customSelectOptions.querySelectorAll('.custom-option');
+        allOpts.forEach(o => o.classList.remove('is-selected'));
+        opt.classList.add('is-selected');
+        
+        // Update trigger label
+        customSelectTrigger.querySelector('span').textContent = opt.textContent;
+        
+        // Close select
+        document.getElementById('customSelect').classList.remove('is-open');
+        
+        try {
+          const res = await fetch('http://localhost:5500/api/model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: selected })
+          });
+          const resData = await res.json();
+          console.log('Model changed:', resData);
+        } catch (err) {
+          console.error('Failed to change model:', err);
+        }
+      });
+      
+      customSelectOptions.appendChild(opt);
+    }
+    
+    // Initial trigger label
+    const activeLabel = labels[activeAlias] || activeAlias;
+    customSelectTrigger.querySelector('span').textContent = activeLabel;
+    
   } catch (err) {
     console.error('Failed to load models:', err);
   }
 }
 
-if (modelSelect) {
-  modelSelect.addEventListener('change', async () => {
-    const selected = modelSelect.value;
-    try {
-      const res = await fetch('http://localhost:5500/api/model', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected })
-      });
-      const data = await res.json();
-      console.log('Model changed:', data);
-    } catch (err) {
-      console.error('Failed to change model:', err);
-    }
+// Toggle dropdown on click
+const customSelect = document.getElementById('customSelect');
+const customSelectTrigger = document.getElementById('customSelectTrigger');
+if (customSelect && customSelectTrigger) {
+  customSelectTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    customSelect.classList.toggle('is-open');
   });
 }
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  if (customSelect) {
+    customSelect.classList.remove('is-open');
+  }
+});
 
 // Initial models load
 loadModels();
