@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from router import MODEL_TRIGGERS, DEFAULT_MODEL
+from router import MODEL_TRIGGERS, DEFAULT_MODEL, get_local_models
 from context import load_goals, detect_goals, get_relevant_chunks, get_goal_profile, get_goal_folders, load_projects
 from memory import load_today_history, save_exchange, get_relevant_past, clear_today
 from chat_core import chat_once
@@ -19,24 +19,45 @@ def get_active_model():
 
 def get_model_info():
     global active_model
+    merged_models = {}
+    
+    # 1. Add cloud models from MODEL_TRIGGERS
+    for alias, fullname in MODEL_TRIGGERS.items():
+        if "/" in fullname:
+            merged_models[alias] = fullname
+            
+    # 2. Add local models dynamically
+    local_models = get_local_models()
+    for alias, fullname in local_models.items():
+        merged_models[alias] = fullname
+        
     return {
         "active_model": active_model or DEFAULT_MODEL,
-        "models": MODEL_TRIGGERS
+        "models": merged_models
     }
 
 def change_model(target: str):
     global active_model
     target = target.lower()
-    if target in MODEL_TRIGGERS:
-        new_model = MODEL_TRIGGERS[target]
-        if new_model != active_model:
-            if active_model is not None and "/" not in active_model:
-                print(f"Freeing VRAM: Stopping local model {active_model}...")
-                subprocess.run(["ollama", "stop", active_model], check=False)
-            active_model = new_model
-            return {"status": "success", "model": active_model}
-        return {"status": "already_active", "model": active_model}
-    return {"status": "error", "message": f"Unknown model alias '{target}'"}
+    
+    # Check if target is a key/alias or fullname in combined models
+    model_info = get_model_info()
+    models_dict = model_info["models"]
+    
+    if target in models_dict:
+        new_model = models_dict[target]
+    elif target in models_dict.values():
+        new_model = target
+    else:
+        return {"status": "error", "message": f"Unknown model alias '{target}'"}
+        
+    if new_model != active_model:
+        if active_model is not None and "/" not in active_model:
+            print(f"Freeing VRAM: Stopping local model {active_model}...")
+            subprocess.run(["ollama", "stop", active_model], check=False)
+        active_model = new_model
+        return {"status": "success", "model": active_model}
+    return {"status": "already_active", "model": active_model}
 
 def process_message(question):
     """

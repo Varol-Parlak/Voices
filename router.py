@@ -1,3 +1,5 @@
+import ollama
+
 DEFAULT_MODEL = "llama3.1:8b"
 
 MODEL_TRIGGERS = {
@@ -10,10 +12,53 @@ MODEL_TRIGGERS = {
     "qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",
 }
 
+def get_local_models() -> dict:
+    try:
+        model_list = ollama.list()
+        local_models = {}
+        
+        models = getattr(model_list, "models", [])
+        if not models and hasattr(model_list, "get"):
+            models = model_list.get("models", [])
+        if not models and isinstance(model_list, list):
+            models = model_list
+            
+        reverse_triggers = {v: k for k, v in MODEL_TRIGGERS.items()}
+        
+        for m in models:
+            name = getattr(m, "model", None)
+            if not name and isinstance(m, dict):
+                name = m.get("model")
+            if not name:
+                continue
+                
+            # Exclude embedding and vision models
+            if "embed" in name.lower() or "minicpm" in name.lower():
+                continue
+                
+            if name in reverse_triggers:
+                alias = reverse_triggers[name]
+            else:
+                alias = name.split(":")[0] if ":" in name else name
+                
+            local_models[alias] = name
+        return local_models
+    except Exception as e:
+        print(f"Error fetching local models: {e}")
+        return {}
+
 def route(prompt: str, current_model: str = None) -> str:
     prompt_lower = prompt.lower()
+    # Check static triggers first
     for trigger, model in MODEL_TRIGGERS.items():
         if trigger in prompt_lower:
             return model
+            
+    # Check dynamic local models
+    local_models = get_local_models()
+    for alias, fullname in local_models.items():
+        if alias.lower() in prompt_lower:
+            return fullname
+            
     return current_model or DEFAULT_MODEL
 

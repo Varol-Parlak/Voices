@@ -8,6 +8,7 @@ import subprocess
 import threading
 import ollama
 from vision.text_reader import read_text
+from context import start_background_watcher
 
 app = Flask(__name__, static_folder='templates', static_url_path='')
 CORS(app)
@@ -108,4 +109,5 @@ def api_set_model():
     return jsonify(res)
 
 if __name__ == '__main__':
+    start_background_watcher()
     app.run(port=5500, debug=True, use_reloader=False)
