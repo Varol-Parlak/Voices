@@ -1,5 +1,6 @@
 import os
 import asyncio
+import subprocess
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from langchain_ollama import ChatOllama
@@ -156,6 +157,62 @@ def replace_in_file(filepath: str, start_line: int, end_line: int, new_code: str
         return f"Successfully edited '{filepath}'. Replaced lines {start_line} through {end_line}."
     except Exception as e:
         return f"Failed to edit file: {e}"
+
+@mcp.tool()
+def write_file(filepath: str, content: str) -> str:
+    """
+    Creates a new file or completely overwrites an existing file with the specified content.
+    Use this to create new code files, write scripts, or overwrite configuration files.
+    """
+    print(f"\n[AI is writing to file: '{filepath}'...]", file=sys.stderr, flush=True)
+    try:
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return f"Successfully wrote to file '{filepath}'."
+    except Exception as e:
+        return f"Failed to write to file: {e}"
+
+@mcp.tool()
+def delete_file(filepath: str) -> str:
+    """
+    Deletes a file from the workspace. Use with caution.
+    """
+    print(f"\n[AI is deleting file: '{filepath}'...]", file=sys.stderr, flush=True)
+    try:
+        path = Path(filepath)
+        if not path.exists():
+            return f"Error: File '{filepath}' does not exist."
+        path.unlink()
+        return f"Successfully deleted file '{filepath}'."
+    except Exception as e:
+        return f"Failed to delete file: {e}"
+
+@mcp.tool()
+def run_command(command: str) -> str:
+    """
+    Runs a terminal/shell command on the local system and returns the combined stdout and stderr.
+    Use this to run tests, execute scripts, check compilation, or run build tools.
+    """
+    print(f"\n[AI is running command: '{command}'...]", file=sys.stderr, flush=True)
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        output = f"Exit Code: {result.returncode}\n"
+        if result.stdout:
+            output += f"--- STDOUT ---\n{result.stdout}\n"
+        if result.stderr:
+            output += f"--- STDERR ---\n{result.stderr}\n"
+        return output
+    except subprocess.TimeoutExpired:
+        return "Error: Command timed out after 30 seconds."
+    except Exception as e:
+        return f"Error executing command: {e}"
 
 
 if __name__ == "__main__":
