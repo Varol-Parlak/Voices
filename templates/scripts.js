@@ -10,7 +10,7 @@
   // ── Auto-resize textarea ──────────────────────────────────────────────────
   msgInput.addEventListener('input', () => {
     msgInput.style.height = 'auto';
-    msgInput.style.height = Math.min(msgInput.scrollHeight, 180) + 'px';
+    msgInput.style.height = msgInput.scrollHeight + 'px';
     sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
   });
 
@@ -203,6 +203,7 @@ async function sendMessage() {
       }
     } // ── end for loop ──
 
+    loadModels();
     isTyping = false;
     sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
     return;
@@ -269,6 +270,7 @@ async function sendMessage() {
     await streamIntoWrap(wrap, text, currentImageFile);
   }
 
+  loadModels();
   isTyping = false;
   sendBtn.disabled = !msgInput.value.trim() && !selectedImageFile;
 }
@@ -713,28 +715,7 @@ const customSelectOptions = document.getElementById('customSelectOptions');
 if (customSelect && customSelectTrigger && customSelectOptions) {
   customSelectTrigger.addEventListener('click', (e) => {
     e.stopPropagation();
-    
-    const isOpen = customSelect.classList.toggle('is-open');
-    if (isOpen) {
-      // Calculate vertical offset to align active option with trigger
-      const activeOption = customSelectOptions.querySelector('.custom-option.is-selected');
-      if (activeOption) {
-        const triggerHeight = customSelectTrigger.offsetHeight;
-        const optionHeight = activeOption.offsetHeight;
-        const optionOffsetTop = activeOption.offsetTop;
-        
-        // Calculate offset so that centers align:
-        // optionOffsetTop + (optionHeight / 2) should align with (triggerHeight / 2)
-        const topOffset = (triggerHeight / 2) - (optionOffsetTop + (optionHeight / 2));
-        customSelectOptions.style.top = `${topOffset}px`;
-      } else {
-        // Fallback: center the whole options container
-        const containerHeight = customSelectOptions.offsetHeight;
-        const triggerHeight = customSelectTrigger.offsetHeight;
-        const topOffset = (triggerHeight / 2) - (containerHeight / 2);
-        customSelectOptions.style.top = `${topOffset}px`;
-      }
-    }
+    customSelect.classList.toggle('is-open');
   });
 }
 

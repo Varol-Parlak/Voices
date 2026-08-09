@@ -233,6 +233,14 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
                         api_kwargs["tools"] = active_tools
                     else:
                         api_kwargs.pop("tools", None)
+                        
+                    # Permanently update the active model on the backend
+                    try:
+                        import control
+                        control.active_model = fallback_model
+                        print(f"Permanently switched active_model to fallback: {fallback_model}", flush=True)
+                    except Exception as ex:
+                        print(f"Failed to update active_model: {ex}", flush=True)
                 else:
                     # If we exhausted attempts or it's a local model, propagate the error
                     raise e
