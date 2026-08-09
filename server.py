@@ -10,7 +10,10 @@ import ollama
 from vision.text_reader import read_text
 from context import start_background_watcher
 
-app = Flask(__name__, static_folder='templates', static_url_path='')
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent
+app = Flask(__name__, static_folder=str(BASE_DIR / 'templates'), static_url_path='')
 CORS(app)
 
 @app.route('/')
