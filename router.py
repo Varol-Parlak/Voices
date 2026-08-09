@@ -1,15 +1,26 @@
 import ollama
 
-DEFAULT_MODEL = "llama3.1:8b"
+DEFAULT_MODEL = "meta/llama-3.3-70b-instruct"
 
 MODEL_TRIGGERS = {
-    "qwen":     "qwen2.5-coder:7b",
-    "deepseek": "deepseek-r1:8b",
-    "llama":    "llama3.1:8b",
-    "gemma": "google/gemma-4-26b-a4b:free",
-    "nemo": "nvidia/nemotron-3-super-120b-a12b:free",
-    "owl": "openrouter/owl-alpha",
-    "qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",
+    # Local models
+    "qwen":          "qwen2.5-coder:7b",
+    "deepseek":      "deepseek-r1:8b",
+    "llama":         "llama3.1:8b",
+    
+    # OpenRouter Cloud models
+    "gemma":         "google/gemma-4-26b-a4b:free",
+    "nemo":          "nvidia/nemotron-3-super-120b-a12b:free",
+    "owl":           "openrouter/owl-alpha",
+    "qwen3":         "qwen/qwen3-next-80b-a3b-instruct:free",
+
+    # NVIDIA NIM Cloud Models
+    "llama3.3":      "meta/llama-3.3-70b-instruct",
+    "nemotron":      "nvidia/llama-3.1-nemotron-70b-instruct",
+    "llama3.1-405b": "meta/llama-3.1-405b-instruct",
+    "deepseek-nim":  "deepseek-ai/deepseek-r1",
+    "gemma2-27b":    "google/gemma-2-27b-it",
+    "mistral-large": "mistralai/mistral-large-2-instruct",
 }
 
 def get_local_models() -> dict:

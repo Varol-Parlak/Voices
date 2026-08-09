@@ -14,6 +14,7 @@ import os
 load_dotenv()
 
 api_key = os.getenv("API_KEY")
+nim_api_key = os.getenv("API_KEY_NIM")
 
 # ==========================================
 local_client = OpenAI(
@@ -26,7 +27,24 @@ cloud_client = OpenAI(
     api_key=api_key , 
 )
 
+nim_client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=nim_api_key,
+)
+
+NIM_MODELS = {
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "meta/llama-3.3-70b-instruct",
+    "meta/llama-3.1-405b-instruct",
+    "deepseek-ai/deepseek-r1",
+    "google/gemma-2-27b-it",
+    "mistralai/mistral-large-2-instruct",
+    "meta/llama-3.1-8b-instruct",
+}
+
 def get_active_client(model_name):
+    if model_name in NIM_MODELS:
+        return nim_client
     if "/" in model_name:
         return cloud_client
     return local_client
@@ -206,11 +224,14 @@ def chat_once(question, active_model, active_voice, history, web_context="", pro
                 
             except Exception as e:
                 attempts += 1
-                fallback_model = "nvidia/nemotron-3-super-120b-a12b:free"
+                if ai_client == nim_client:
+                    fallback_model = "meta/llama-3.1-8b-instruct"
+                else:
+                    fallback_model = "nvidia/nemotron-3-super-120b-a12b:free"
                 
-                if ai_client == cloud_client and api_kwargs["model"] != fallback_model and attempts < max_attempts:
-                    print(f"Cloud model {api_kwargs['model']} failed: {e}. Falling back to stable Nemotron...", flush=True)
-                    yield f"\n_[Cloud model failed: {e}. Falling back to Nemotron...]_\n"
+                if ai_client in (cloud_client, nim_client) and api_kwargs["model"] != fallback_model and attempts < max_attempts:
+                    print(f"Cloud/NIM model {api_kwargs['model']} failed: {e}. Falling back...", flush=True)
+                    yield f"\n_[Cloud/NIM model failed: {e}. Falling back...]_\n"
                     
                     # Update parameters for the fallback model
                     api_kwargs["model"] = fallback_model

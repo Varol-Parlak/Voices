@@ -637,12 +637,18 @@ async function loadModels() {
     
     const labels = {
       'qwen': 'Qwen 2.5 Coder',
-      'deepseek': 'DeepSeek R1',
-      'llama': 'Llama 3.1',
-      'gemma': 'Gemma 4 31B',
-      'nemo': 'Nemotron 3',
-      'owl': 'Owl Alpha',
-      'qwen3': 'Qwen 3 Next'
+      'deepseek': 'DeepSeek R1 (Local)',
+      'llama': 'Llama 3.1 (Local)',
+      'gemma': 'Gemma 4 31B (OR)',
+      'nemo': 'Nemotron 3 (OR)',
+      'owl': 'Owl Alpha (OR)',
+      'qwen3': 'Qwen 3 Next (OR)',
+      'llama3.3': 'Llama 3.3 70B (NIM)',
+      'nemotron': 'Llama 3.1 Nemotron 70B (NIM)',
+      'llama3.1-405b': 'Llama 3.1 405B (NIM)',
+      'deepseek-nim': 'DeepSeek R1 (NIM)',
+      'gemma2-27b': 'Gemma 2 27B (NIM)',
+      'mistral-large': 'Mistral Large 2 (NIM)'
     };
 
     let activeAlias = 'llama';
