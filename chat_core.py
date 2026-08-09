@@ -32,15 +32,7 @@ nim_client = OpenAI(
     api_key=nim_api_key,
 )
 
-NIM_MODELS = {
-    "nvidia/llama-3.1-nemotron-70b-instruct",
-    "meta/llama-3.3-70b-instruct",
-    "meta/llama-3.1-405b-instruct",
-    "deepseek-ai/deepseek-r1",
-    "google/gemma-2-27b-it",
-    "mistralai/mistral-large-2-instruct",
-    "meta/llama-3.1-8b-instruct",
-}
+from router import NIM_MODELS
 
 def get_active_client(model_name):
     if model_name in NIM_MODELS:

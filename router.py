@@ -2,6 +2,16 @@ import ollama
 
 DEFAULT_MODEL = "meta/llama-3.3-70b-instruct"
 
+NIM_MODELS = {
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "meta/llama-3.3-70b-instruct",
+    "meta/llama-3.1-405b-instruct",
+    "deepseek-ai/deepseek-r1",
+    "google/gemma-2-27b-it",
+    "mistralai/mistral-large-2-instruct",
+    "meta/llama-3.1-8b-instruct",
+}
+
 MODEL_TRIGGERS = {
     # Local models
     "qwen":          "qwen2.5-coder:7b",
